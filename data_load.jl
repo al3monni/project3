@@ -10,10 +10,13 @@ const datasets = [
     "08-letter-r_knn_F.h5"
 ]
 const penalty = 0.01
+const n = 16
+const m = 1.0f0
+const s = 4
 
 # ============== Helpers ===============
 
-count_ones(x::Integer) = count_ones(unsigned(x))
+count_ones(x::Integer) = Base.count_ones(unsigned(x))
 
 # ============= Functions ==============
 
@@ -34,32 +37,25 @@ function get_fitness(x::Integer, lookup::Vector{Float32}, w::Real)
     return lookup[x] - penalty
 end
 
-function triangle_fitness(x::Integer; m::Float32=1.0f0, s::Int=4)
+function triangle_fitness(b::Integer; m::Float32=1.0f0, s::Int=4)
 
-    u = count_ones(x)
+    r = abs(b)
+    t = mod(r, 2s)
 
-    # compute the block and position within the block
-    block = (u - 1) ÷ s
-    pos = (u - 1) % s
-
-    if iseven(block)
-        # even block, increasing fitness
-        return m * (pos + 1)
+    if t <= s
+        return m * t
     else
-        # odd block, decreasing fitness
-        return m * (s - pos)
+        return m * (2s - t)
     end
 end
 
-function triangle_lookup(n::Int; m::Float32=1.0f0, s::Int=4)
-
-    size = 1 << n
+function triangle_lookup(n::Integer; m::Float32=1.0f0, s::Int=4)
 
     # preallocate the lookup table
-    lookup = Vector{Float32}(undef, size)
+    lookup = Vector{Float32}(undef, n)
 
     # precompute and store triangle fitness values
-    @inbounds for x in 1:size
+    @inbounds for x in 1:n                              # pay attention here
         lookup[x] = triangle_fitness(x; m=m, s=s)
     end
 
@@ -70,9 +66,14 @@ end
 
 function main()
 
-    means = load_landscape(datasets[1])
-    println("Prime 5 entità del vettore:")
-    display(means[1:min(5, length(means))])
+    landscape = load_landscape(datasets[1])
+    println("First 5 entities of the landscape:")
+    display(landscape[1:min(5, length(landscape))])
+
+    triangle_landscape = triangle_lookup(n; m=m, s=s)
+    println("\nFirst 16 entities of the triangle landscape:")
+    display(triangle_landscape[1:min(16, length(triangle_landscape))])
+
 end
 
 main()
