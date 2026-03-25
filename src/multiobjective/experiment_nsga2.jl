@@ -163,9 +163,9 @@ end
 # =========================================================
 
 files = [
-    "01-breast-w_lr_F.h5",
-    "05-credit-a_rf_F.h5",
-    "08-letter-r_knn_F.h5"
+    "../../train/01-breast-w_lr_F.h5",
+    "../../train/05-credit-a_rf_F.h5",
+    "../../train/08-letter-r_knn_F.h5"
 ]
 
 n_runs = 10
