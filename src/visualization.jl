@@ -1,6 +1,6 @@
 using CairoMakie
 
-function hinged_bitstring_map(landscape::Vector{Float32})
+function hinged_bitstring_map(landscape::Vector{Float32}, local_optima::Vector{Int} = Int[])
     n = length(landscape)
     bits = ceil(Int, log2(n))
 
@@ -20,18 +20,25 @@ function hinged_bitstring_map(landscape::Vector{Float32})
         push!(y, yi)
     end
 
-    f = Figure()
+    f = Figure(size = (1200, 900))
     ax = Axis(f[1, 1],
         title = "Hinged Bitstring Map",
         xlabel = "First half",
         ylabel = "Second half"
     )
-    # map = scatter!(ax, x, y,
-    #     color = landscape,
-    #     colormap = :viridis
-    # )
-    map = heatmap!(ax, x, y, landscape,
-        colormap = :viridis
+
+    # base plot
+    map = heatmap!(ax, x, y, landscape, colormap = :viridis)
+
+    # extract coordinates of local optima
+    x_opt = x[local_optima]
+    y_opt = y[local_optima]
+
+    # overlay: highlight them
+    scatter!(ax, x_opt, y_opt,
+        color = :white,
+        strokecolor = :black,
+        strokewidth = 1
     )
     Colorbar(f[1, 2], map, label = "Fitness")
     f

@@ -1,23 +1,5 @@
 using HDF5
 using Statistics
-include("visualization.jl")
-
-# ============= Parameters =============
-
-const dataset_name = "accuracies"
-const datasets = [
-    "01-breast-w_lr_F.h5",
-    "05-credit-a_rf_F.h5",
-    "08-letter-r_knn_F.h5"
-]
-const penalty = 0.01
-const n = 16
-const m = 1.0f0
-const s = 4
-
-# ============== Helpers ===============
-
-count_ones(x::Integer) = Base.count_ones(unsigned(x))
 
 # ============= Functions ==============
 
@@ -62,21 +44,3 @@ function triangle_lookup(n::Integer; m::Float32=1.0f0, s::Int=4)
 
     return lookup
 end
-
-# =============== Main =================
-
-function main()
-
-    landscape = load_landscape(datasets[1])
-    println("First 5 entities of the landscape:")
-    display(landscape[1:min(5, length(landscape))])
-
-    hinged_bitstring_map(landscape)
-
-    triangle_landscape = triangle_lookup(n; m=m, s=s)
-    println("\nFirst 16 entities of the triangle landscape:")
-    display(triangle_landscape[1:min(16, length(triangle_landscape))])
-
-end
-
-main()
