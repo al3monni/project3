@@ -1,5 +1,6 @@
 using HDF5
 using Statistics
+include("visualization.jl")
 
 # ============= Parameters =============
 
@@ -22,7 +23,7 @@ count_ones(x::Integer) = Base.count_ones(unsigned(x))
 
 function load_landscape(filename::String)
     # obtain a reference for the hdf5 file
-    h5open("train data/"*filename, "r") do f
+    h5open("train/"*filename, "r") do f
         # select the "accuracies" dataset
         data = read(f[dataset_name])
         # compute the mean of each row
@@ -69,6 +70,8 @@ function main()
     landscape = load_landscape(datasets[1])
     println("First 5 entities of the landscape:")
     display(landscape[1:min(5, length(landscape))])
+
+    hinged_bitstring_map(landscape)
 
     triangle_landscape = triangle_lookup(n; m=m, s=s)
     println("\nFirst 16 entities of the triangle landscape:")
