@@ -1,5 +1,6 @@
 using HDF5
 using Statistics
+include("visualization.jl")
 
 # ============= Functions ==============
 
@@ -44,3 +45,16 @@ function triangle_lookup(n::Integer; m::Float32=1.0f0, s::Int=4)
 
     return lookup
 end
+
+# =============== Main =================
+
+function main()
+
+    landscape = load_landscape(datasets[1])
+    #landscape = triangle_lookup(n; m=m, s=s)
+    fig = plot_landscape_polar(landscape)
+    display(fig)
+
+end
+
+main()
