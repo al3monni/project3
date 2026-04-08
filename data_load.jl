@@ -1,5 +1,6 @@
 using HDF5
 using Statistics
+include("visualization.jl")
 
 # ============= Parameters =============
 
@@ -67,12 +68,9 @@ end
 function main()
 
     landscape = load_landscape(datasets[1])
-    println("First 5 entities of the landscape:")
-    display(landscape[1:min(5, length(landscape))])
-
-    triangle_landscape = triangle_lookup(n; m=m, s=s)
-    println("\nFirst 16 entities of the triangle landscape:")
-    display(triangle_landscape[1:min(16, length(triangle_landscape))])
+    #landscape = triangle_lookup(n; m=m, s=s)
+    fig = plot_landscape_polar(landscape)
+    display(fig)
 
 end
 
