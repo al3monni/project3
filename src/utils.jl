@@ -6,9 +6,8 @@ function get_local_optima(landscape::Vector{Float32})
     local_optima = Int[]
 
     for i in 1:n
-        b = lpad(string(i, base=2), bits, '0')
 
-        neighbors = get_neighbors(b)
+        neighbors = get_neighbors(i, bits)
 
         best = true
         for neighbor in neighbors
@@ -26,22 +25,21 @@ function get_local_optima(landscape::Vector{Float32})
     return local_optima
 end
 
-function get_neighbors(individual::String)
-    n = length(individual)
-    neighbors = Int[]
 
-    for i in 1:n
-        # flip the i-th bit
-        flipped = individual[i] == '0' ? '1' : '0'
+function get_neighbors(index::Int, n_bits::Int)
 
-        neighbor = individual[1:i-1] * flipped * individual[i+1:end]
-        neighbor = parse(Int, neighbor; base=2)
+    neigh = Int[]
+
+    for i in 0:n_bits-1
+
+        neighbor = index ⊻ (1 << i)  # flip bit i
 
         if neighbor == 0
             continue
+        else 
+            push!(neigh, neighbor)
         end
-        push!(neighbors, neighbor)
     end
 
-    return neighbors
+    return neigh
 end
