@@ -2,6 +2,7 @@ include("data_load.jl")
 include("utils.jl")
 include("visualization.jl")
 include("local_optima_network.jl")
+include("plot_lon.jl")
 
 # ============== Global Parameters =============
 
@@ -20,30 +21,48 @@ const s = 4
 
 function main()
 
-    # 0.1 Load the landscape and get the local optima
-    landscape = load_landscape(datasets[1])
-    local_optima = get_local_optima(landscape)
+    for i in eachindex(datasets)
 
-    # 0.2 Get the number of bits needed to represent the landscape
-    n = length(landscape)
-    n_bits = ceil(Int, log2(n))
+        # 0.1 Load the landscape and get the local optima
+        landscape = load_landscape(datasets[i])
+        n = length(landscape)
+        n_bits = ceil(Int, log2(n))
+        local_optima = get_local_optima(landscape)
 
-    #println("Local optima: $local_optima")
-    #hinged_bitstring_map(landscape, local_optima)
+        # ============== Visualizations ==============
 
-    # =============================================================
+        f1 = plot_landscape(landscape)
+        f2 = plot_landscape_polar(landscape)
+        #println("Local optima: $local_optima")
+        f3 = hinged_bitstring_map(landscape, local_optima)
 
-    # Build LON
-    g, opt_index_map, basin_map = build_LON(landscape, local_optima, n_bits)
+        # ==================== LON ====================
+        
+        # Build LON
+        g, opt_index_map, basin_map = build_LON(landscape, local_optima, n_bits)
 
-    # Compute basin sizes
-    basin_sizes = compute_basin_sizes(basin_map, local_optima)
+        # Compute basin sizes
+        basin_sizes = compute_basin_sizes(basin_map, local_optima)
 
-    # Export LON
-    export_LON(landscape, g, opt_index_map, basin_sizes)
+        # Export LON
+        # export_LON(landscape, g, opt_index_map, basin_sizes)
 
-    # Plot LON
+        # Plot LON
+        f4 = plot_lon(g, landscape, opt_index_map, basin_sizes)
 
+        display(f1)
+        display(f2)
+        display(f3)
+        display(f4)
+
+        out_path = mkpath(joinpath(@__DIR__, "..", "img"))
+
+        save("$out_path/$(datasets[i])_landscape.png",              f1)
+        save("$out_path/$(datasets[i])_landscape_polar.png",        f2)
+        save("$out_path/$(datasets[i])_hinged_bitstring_map.png",   f3)
+        save("$out_path/$(datasets[i])_lon.png",                    f4)
+
+    end
 end
 
 main()

@@ -41,19 +41,18 @@ function hinged_bitstring_map(landscape::Vector{Float32}, local_optima::Vector{I
         strokewidth = 1
     )
     Colorbar(f[1, 2], map, label = "Fitness")
-    f
+    return f
 end
-
 
 function plot_landscape(fitness_lookup::Vector{Float32})
 
     # extract the individuals
     x = eachindex(fitness_lookup)
 
-    fig = Figure(size = (900, 500))
+    f = Figure(size = (900, 500))
     
     ax = Axis(
-        fig[1, 1],
+        f[1, 1],
         title = "Fitness Landscape",
         xlabel = "Individual index",
         ylabel = "Fitness"
@@ -62,7 +61,7 @@ function plot_landscape(fitness_lookup::Vector{Float32})
     lines!(ax, x, fitness_lookup)
     scatter!(ax, x, fitness_lookup)
 
-    return fig
+    return f
 end
 
 function plot_landscape_polar(
@@ -94,9 +93,9 @@ function plot_landscape_polar(
     x = r .* cos.(θ)
     y = r .* sin.(θ)
 
-    fig = Figure(size = (800, 800))
+    f = Figure(size = (800, 800))
     ax = Axis(
-        fig[1, 1],
+        f[1, 1],
         title = "Polar Fitness Landscape",
         aspect = DataAspect()
     )
@@ -112,5 +111,5 @@ function plot_landscape_polar(
     hidedecorations!(ax)
     hidespines!(ax)
 
-    return fig
+    return f
 end
