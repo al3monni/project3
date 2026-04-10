@@ -1,147 +1,141 @@
 using Graphs
+using GraphPlot
 using CairoMakie
+using GraphMakie
 using NetworkLayout
+using CSV, DataFrames
 
 include("utils.jl")
 
-# --- Hill climbing to find basin attractor
-function hill_climb(start::Int, fitness::Vector{Float64}, n_bits::Int)
+function hill_climb(start::Int, landscape::Vector{Float32}, n_bits::Int)
     current = start
     while true
-        neigh = get_neighbors(current, n_bits)
-        best = current
+        neigh = neighbors(current, n_bits)
+        # pick the neighbor with maximum fitness (greedy)
+        best_fitness = landscape[current]
+        best_neighbor = current
         for n in neigh
-            if n < length(fitness) && fitness[n+1] > fitness[best+1]
-                best = n
+            if landscape[n] > best_fitness
+                best_fitness = landscape[n]
+                best_neighbor = n
             end
         end
-        if best == current
-            return current
+        # stop if no improvement
+        if best_neighbor == current
+            return current  # local optimum reached
         end
-        current = best
+        current = best_neighbor
     end
-end
+end # Debug OK 
 
-# --- Assign each state to a basin (local optimum)
-function compute_basins(fitness::Vector{Float64}, n_bits::Int)
-    basin_map = Dict{Int, Int}()
-    for i in 0:length(fitness)-1
-        basin_map[i] = hill_climb(i, fitness, n_bits)
+function compute_basins(landscape::Vector{Float32}, local_optima::Vector{Int}, n_bits::Int)
+    n = length(landscape)
+    basin_map = Dict{Int, Int}()  # point index → optimum index
+
+    for i in 1:n
+        basin_map[i] = hill_climb(i, landscape, n_bits)
     end
+
     return basin_map
-end
+end # Debug OK
 
-function build_lon(
-    fitness::Vector{Float64},
-    local_optima::Vector{Int},
-    n_bits::Int
-    )
+function compute_basin_sizes(basin_map::Dict{Int,Int}, local_optima::Vector{Int})
 
-    basin_map = compute_basins(fitness, n_bits)
+    basin_sizes = Dict{Int, Int}()
 
-    # Map optima to node ids
-    opt_index = Dict(opt => i for (i, opt) in enumerate(local_optima))
+    for opt in local_optima
+        basin_sizes[opt] = 0
+    end
 
-    g = DiGraph(length(local_optima))
+    for (_, opt) in basin_map
+        basin_sizes[opt] += 1
+    end
 
-    weights = Dict{Tuple{Int,Int}, Float64}()
+    return basin_sizes
+end # Debug OK
 
-    for state in 0:length(fitness)-1
+function build_LON(landscape::Vector{Float32}, local_optima::Vector{Int}, n_bits::Int)
+    
+    # compute the number of local optima
+    n_opt = length(local_optima)
 
-        b1 = basin_map[state]
+    # create a graph with n nodes representing the local optima
+    g = DiGraph(n_opt)
 
-        for neigh in neighbors(state, n_bits)
+    # map the local optima to their graph indices
+    opt_index_map = Dict(opt => idx for (idx, opt) in enumerate(local_optima))
 
-            if neigh < length(fitness)
+    # compute basin for each point
+    basin_map = compute_basins(landscape, local_optima, n_bits)
 
-                b2 = basin_map[neigh]
+    # create an edge set to avoid duplicates
+    edges_added = Set{Tuple{Int,Int}}()
 
-                if b1 != b2 && haskey(opt_index, b1) && haskey(opt_index, b2)
-                    u = opt_index[b1]
-                    v = opt_index[b2]
-                    weights[(u,v)] = get(weights, (u,v), 0.0) + 1.0
+    for i in 1:length(landscape)
+        current_basin = basin_map[i]
+        neigh = neighbors(i, n_bits)
+        for n in neigh
+            neighbor_basin = basin_map[n]
+            if neighbor_basin != current_basin
+                # add directed edge from current basin to neighbor basin
+                src = opt_index_map[current_basin]
+                dst = opt_index_map[neighbor_basin]
+                if (src,dst) ∉ edges_added
+                    add_edge!(g, src, dst)
+                    push!(edges_added, (src,dst))
                 end
             end
         end
     end
 
-    # Add edges
-    for ((u,v), w) in weights
-        add_edge!(g, u, v)
-    end
+    return g, opt_index_map, basin_map
+end # Debug OK
 
-    return g, weights
-end
-
-function plot_lon_makie(g::DiGraph, weights; node_labels=true)
-    n = nv(g)
-
-    # --- Layout (spring layout)
-    layout = spring(g)  # from NetworkLayout.jl
-    xs = [p[1] for p in layout]
-    ys = [p[2] for p in layout]
-
-    fig = Figure()
-    ax = Axis(fig[1,1], title="Local Optima Network")
-
-    # --- Draw edges
-    for e in edges(g)
-        u, v = src(e), dst(e)
-
-        x1, y1 = xs[u], ys[u]
-        x2, y2 = xs[v], ys[v]
-
-        w = get(weights, (u,v), 1.0)
-
-        # thickness scaled by weight
-        lines!(ax, [x1, x2], [y1, y2], linewidth=1 + 2w)
-
-        # edge label (midpoint)
-        mx, my = (x1+x2)/2, (y1+y2)/2
-        text!(ax, string(round(w, digits=2)), position=(mx, my), align=(:center, :center))
-    end
-
-    # --- Draw nodes
-    scatter!(ax, xs, ys, markersize=20)
-
-    # --- Node labels
-    if node_labels
-        for i in 1:n
-            text!(ax, string(i), position=(xs[i], ys[i]),
-                  align=(:center, :center), offset=(0, 10))
-        end
-    end
-
-    fig
-end
-
-#-------------------------------
-
-function compute_basins_wrong(
-    fitness::Vector{Float64},
-    local_optima::Vector{Int}
+function export_LON(
+    landscape::Vector{Float32},
+    g::DiGraph,
+    opt_index_map::Dict{Int,Int},
+    basin_sizes::Dict{Int,Int}
     )
 
-    # Local function to compute the hamming distance
-    hamming_dist(a, b) = count_ones(a ⊻ b)
+    # Build reverse map (graph idx → optimum)
+    index_to_opt = Dict(v => k for (k,v) in opt_index_map)
 
-    # Preallocate the basin map
-    basin_map = Dict{Int, Int}()
+    # Nodes Table
+    nodes_df = DataFrame(
+        Id = Int[],
+        Label = String[],
+        Fitness = Float32[],
+        BasinSize = Int[]
+    )
 
-    # For each bitstring find the closest local optimum
-    for i in 0:length(fitness)-1
-        # find the closest local optimum in terms of hamming distance
-        hamming_min = typemax(Int)
-        optimal = -1
-        for opt in local_optima
-            dist = hamming_dist(i, opt)
-            if dist < hamming_min
-                hamming_min = dist
-                optimal = opt
-            end
-        end
-        basin_map[i] = optimal
+    for i in 1:nv(g)
+        opt = index_to_opt[i]
+
+        push!(nodes_df, (
+            i,
+            string(opt),
+            landscape[opt],
+            basin_sizes[opt]
+        ))
     end
 
-    return basin_map
-end
+    # Edges Table
+    edges_df = DataFrame(
+        Source = Int[],
+        Target = Int[],
+    )
+
+    for e in edges(g)
+        s = src(e)
+        d = dst(e)
+        push!(edges_df, (s, d))
+    end
+
+    out_path = mkpath(joinpath(@__DIR__, "..", "csv"))
+
+    CSV.write(joinpath(out_path, "nodes.csv"), nodes_df)
+    CSV.write(joinpath(out_path, "edges.csv"), edges_df)
+
+    # println("Export complete: nodes.csv and edges.csv saved in $out_path.")
+end # Debug OK
