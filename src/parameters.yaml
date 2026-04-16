@@ -1,0 +1,39 @@
+# Project 3 - Bio-inspired AI
+# Centralized configuration file
+
+# Datasets to use
+datasets:
+  - "01-breast-w_lr_F.h5"
+  # - "05-credit-a_rf_F.h5"
+  # - "08-letter-r_knn_F.h5"
+
+# Landscape parameters
+landscape:
+  dataset_name: "accuracies"
+  penalty: 0.01
+  n: 16           # for synthetic landscape
+  m: 1.0          # for synthetic landscape
+  s: 4            # for synthetic landscape
+
+# Experiment parameters
+experiment:
+  n_runs: 30              # Number of independent runs
+  popsize: 50             # Population size
+  generations: 100        # Number of generations
+  output_dir: "res"       # Base output directory
+
+# Algorithm parameters
+algorithms:
+  GA:
+    pc: 0.9               # Crossover probability
+    pm: -1.0              # Mutation probability (-1 = auto: 1/n_bits)
+    # tournament_size: 3    # Tournament selection size
+
+  PSO:
+    w: 0.7                # Inertia weight
+    c1: 1.5               # Cognitive coefficient
+    c2: 1.5               # Social coefficient
+
+  NSGA2:
+    pc: 0.9               # Crossover probability
+    pm: -1.0              # Mutation probability (-1 = auto: 1/n_bits)

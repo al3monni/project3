@@ -56,3 +56,30 @@ function main_old()
         println(to_bitstring(i, n_bits))
     end
 end
+
+
+using Printf
+
+function next_run_dir(base::String)
+    # ensure base directory exists
+    isdir(base) || mkpath(base)
+
+    # list existing runs
+    dirs = readdir(base)
+
+    # extract numbers from "runX"
+    runs = Int[]
+    for d in dirs
+        m = match(r"^run(\d+)$", d)
+        if m !== nothing
+            push!(runs, parse(Int, m.captures[1]))
+        end
+    end
+
+    next_id = isempty(runs) ? 1 : maximum(runs) + 1
+
+    run_dir = joinpath(base, @sprintf("run%d", next_id))
+    mkpath(run_dir)
+
+    return run_dir
+end

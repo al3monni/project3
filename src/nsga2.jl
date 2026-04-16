@@ -92,7 +92,12 @@ end
 
 function lookup_accuracy(bits::BitVector, landscape::Landscape)
     idx = bitvector_to_index(bits)
-    return idx == 0 ? -Inf : landscape.mean_accuracies[idx]
+    if idx == 0
+        return -Inf
+    elseif idx > length(landscape.mean_accuracies)
+        error("Bitvector index out of bounds for landscape lookup.")
+    end
+    return landscape.mean_accuracies[idx]
 end
 
 function num_selected_features(bits::BitVector)
@@ -214,7 +219,7 @@ function assign_crowding_distance!(population::Vector{Individual}, front::Vector
 
         fmax == fmin && continue
 
-        for j in 2:length(sorted_front)-1
+        for j in 2:(length(sorted_front)-1)
             prev_obj = population[sorted_front[j - 1]].objectives[m]
             next_obj = population[sorted_front[j + 1]].objectives[m]
 
