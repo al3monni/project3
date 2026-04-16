@@ -58,7 +58,7 @@ function PSO!(
     popsize::Int64,
     k_max::Int64;
     w=1.0, c1=1.0, c2=1.0, maximize=true
-)
+    )
     L = length(landscape)
     n_bits = ceil(Int, log2(L))
 
@@ -136,7 +136,6 @@ function PSO!(
     return history, Result(best.y_best, best.x_best, population, k_max, n_evals, runtime)
 end
 
-
 # ==================== Genetic Algorithm ====================
 
 function GA!(
@@ -148,7 +147,7 @@ function GA!(
     M::EvoLP.Mutator=EvoLP.BitwiseMutator(0.05),
     pc=0.9,
     pm=-1.0
-)
+    )
     L = length(landscape)
     n_bits = ceil(Int, log2(L))
 

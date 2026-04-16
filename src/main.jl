@@ -27,19 +27,20 @@ const GA_PARAMS = Dict(
     :pc => CONFIG["algorithms"]["GA"]["pc"],
     :pm => CONFIG["algorithms"]["GA"]["pm"]
     )
-    const PSO_PARAMS = Dict(
-        :w => CONFIG["algorithms"]["PSO"]["w"],
-        :c1 => CONFIG["algorithms"]["PSO"]["c1"],
-        :c2 => CONFIG["algorithms"]["PSO"]["c2"]
-        )
-        const NSGA2_PARAMS = Dict(
-            :pc => CONFIG["algorithms"]["NSGA2"]["pc"],
-            :pm => CONFIG["algorithms"]["NSGA2"]["pm"]
-            )
+const PSO_PARAMS = Dict(
+    :w => CONFIG["algorithms"]["PSO"]["w"],
+    :c1 => CONFIG["algorithms"]["PSO"]["c1"],
+    :c2 => CONFIG["algorithms"]["PSO"]["c2"]
+    )
+const NSGA2_PARAMS = Dict(
+    :pc => CONFIG["algorithms"]["NSGA2"]["pc"],
+    :pm => CONFIG["algorithms"]["NSGA2"]["pm"]
+    )
             
 # ============== Visualizations ==============
 
 function run_visualizations()
+    
     println("\nRunning landscape visualizations...")
 
     for dataset in DATASETS
@@ -48,32 +49,33 @@ function run_visualizations()
         n_bits = ceil(Int, log2(n))
         local_optima = get_local_optima(landscape)
 
-            #f1 = plot_landscape(landscape)
-            #f2 = plot_landscape_polar(landscape)
-                f3 = hinged_bitstring_map(landscape, local_optima)
+        #f1 = plot_landscape(landscape)
+        #f2 = plot_landscape_polar(landscape)
+        f3 = hinged_bitstring_map(landscape, local_optima)
 
-            # ==================== LON ====================
-            
-            # Build LON
-            g, opt_index_map, basin_map = build_LON(landscape, local_optima, n_bits; k=k)
+        # ==================== LON ====================
+        
+        # Build LON
+        g, opt_index_map, basin_map = build_LON(landscape, local_optima, n_bits; k=k)
 
-            # Compute basin sizes
-            basin_sizes = compute_basin_sizes(basin_map, local_optima)
+        # Compute basin sizes
+        basin_sizes = compute_basin_sizes(basin_map, local_optima)
 
-            # Export LON
-            # export_LON(landscape, g, opt_index_map, basin_sizes)
+        # Export LON
+        # export_LON(landscape, g, opt_index_map, basin_sizes)
 
-            # Plot LON
-            f4 = plot_lon(g, landscape, opt_index_map, basin_sizes)
+        # Plot LON
+        f4 = plot_lon(g, landscape, opt_index_map, basin_sizes)
 
-            #display(f1)
-            #display(f2)
-            display(f3)
-            display(f4)
+        #display(f1)
+        #display(f2)
+        display(f3)
+        display(f4)
 
-            img = "img$k"
-            out_path = joinpath(@__DIR__, "..", img)
-            mkpath(out_path)
+        img = "img$k"
+        out_path = joinpath(@__DIR__, "..", img)
+        mkpath(out_path)
+
         dataset_short = split(dataset, ".")[1]
 
         save("$out_path/$(dataset_short)_landscape.png", f1)
@@ -83,7 +85,6 @@ function run_visualizations()
 
         println("  Saved visualizations for $dataset")
     end
-
 end
 
 # ============== Run Experiment ==============

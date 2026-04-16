@@ -22,7 +22,7 @@ function NSGA2!(
     pm::Float64 = -1.0,
     seed::Int = 42,
     verbose::Bool = true
-)
+    )
     Random.seed!(seed)
 
     n_bits = landscape.n_features
@@ -289,7 +289,7 @@ function create_offspring(
     popsize::Int,
     pc::Float64,
     pm::Float64
-)
+    )
     offspring = Individual[]
 
     while length(offspring) < popsize

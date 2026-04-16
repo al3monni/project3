@@ -14,7 +14,7 @@ function plot_lon(
     show_arrows = true,
     edge_alpha = 0.2,
     figsize = (900, 800)
-)
+    )
 
     N = nv(g)
 
