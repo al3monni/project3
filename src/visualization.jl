@@ -113,3 +113,24 @@ function plot_landscape_polar(
 
     return f
 end
+
+function plot_history(history; title="Fitness History")
+    generations = 1:size(history, 2)
+    f = Figure(size = (900, 500))
+    ax = Axis(
+        f[1, 1],
+        title = title,
+        xlabel = "Generation",
+        ylabel = "Fitness",
+        limits = (0, GENERATIONS, 0.94, 0.975)
+    )
+
+    # Plot mean fitness
+    lines!(ax, generations, history[3, :], label = "Mean Fitness", color=:blue)
+
+    # Plot min/max as a shaded area
+    band!(ax, generations, history[1, :], history[2, :], color=:blue, alpha=0.3, label="Min-Max Range")
+
+    axislegend(ax)    
+    return f
+end

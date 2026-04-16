@@ -9,17 +9,17 @@ function load_landscape(filename::String)
     h5open("train/"*filename, "r") do f
 
         # select the "accuracies" dataset
-        data = read(f[dataset_name])
+        data = read(f[DATASET_NAME])
 
         # compute the mean of each row
         return vec(mean(data, dims=2))
     end
 end
 
-function get_fitness(x::Integer, lookup::Vector{Float32}, w::Real)
+function get_fitness(x::Integer, lookup::Vector{Float32})
 
     # compute the penalty based on feature number
-    penalty = w * count_ones(x)
+    penalty = PENALTY * count_ones(x)
     
     # return the penalized fitness
     return lookup[x] - penalty
