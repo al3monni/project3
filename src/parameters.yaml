@@ -1,6 +1,9 @@
 # Project 3 - Bio-inspired AI
 # Centralized configuration file
 
+neighborhood: 
+  size: 1 # Number of neighbors for local optima detection
+
 # Datasets to use
 datasets:
   - "01-breast-w_lr_F.h5"

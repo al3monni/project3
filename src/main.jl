@@ -17,6 +17,7 @@ const CONFIG = YAML.load_file(joinpath(@__DIR__, "parameters.yaml"))
 const DATASETS = CONFIG["datasets"]
 const DATASET_NAME = CONFIG["landscape"]["dataset_name"]
 const PENALTY = CONFIG["landscape"]["penalty"]
+const NEIGHBORHOOD_SIZE = CONFIG["neighborhood"]["size"]
 
 const N_RUNS = CONFIG["experiment"]["n_runs"]
 const POPSIZE = CONFIG["experiment"]["popsize"]
@@ -40,14 +41,14 @@ const NSGA2_PARAMS = Dict(
 # ============== Visualizations ==============
 
 function run_visualizations()
-    
+
     println("\nRunning landscape visualizations...")
 
     for dataset in DATASETS
         landscape = load_landscape(dataset)
         n = length(landscape)
         n_bits = ceil(Int, log2(n))
-        local_optima = get_local_optima(landscape)
+        local_optima = get_local_optima(landscape; k=NEIGHBORHOOD_SIZE)
 
         #f1 = plot_landscape(landscape)
         #f2 = plot_landscape_polar(landscape)
@@ -56,7 +57,7 @@ function run_visualizations()
         # ==================== LON ====================
         
         # Build LON
-        g, opt_index_map, basin_map = build_LON(landscape, local_optima, n_bits; k=k)
+        g, opt_index_map, basin_map = build_LON(landscape, local_optima, n_bits; k=NEIGHBORHOOD_SIZE)
 
         # Compute basin sizes
         basin_sizes = compute_basin_sizes(basin_map, local_optima)
@@ -147,8 +148,8 @@ function main()
         dataset_results["GA"] = run(landscape, GA!, POPSIZE, GENERATIONS, GA_PARAMS, N_RUNS)
 
         # Run PSO
-        println("\nRunning PSO...")
-        dataset_results["PSO"] = run(landscape, PSO!, POPSIZE, GENERATIONS, PSO_PARAMS, N_RUNS)
+        # println("\nRunning PSO...")
+        # dataset_results["PSO"] = run(landscape, PSO!, POPSIZE, GENERATIONS, PSO_PARAMS, N_RUNS)
 
         # # Run NSGA2
         # println("\nRunning NSGA2...")
@@ -173,4 +174,38 @@ function main()
 
 end
 
-main()
+function test_behavior()
+    dataset = DATASETS[1]
+    landscape = load_landscape(dataset)
+
+    history, _ = GA!(landscape, 20, 200)
+
+    best_fitness = history[2, end]
+
+    n = length(landscape)
+    n_bits = ceil(Int, log2(n))
+    local_optima = get_local_optima(landscape; k=NEIGHBORHOOD_SIZE)
+
+    f1 = plot_landscape(landscape)
+    f2 = plot_landscape_polar(landscape)
+    f3 = hinged_bitstring_map(landscape, local_optima)
+
+    # Build LON
+    g, opt_index_map, basin_map = build_LON(landscape, local_optima, n_bits; k=NEIGHBORHOOD_SIZE)
+
+    # Compute basin sizes
+    basin_sizes = compute_basin_sizes(basin_map, local_optima)
+
+    # Export LON
+    # export_LON(landscape, g, opt_index_map, basin_sizes)
+
+    # Plot LON
+    f4 = plot_lon(g, landscape, opt_index_map, basin_sizes)
+
+
+
+end
+
+test_behavior()
+
+#main()

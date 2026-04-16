@@ -50,12 +50,14 @@ function plot_lon(
         Spring()
     end
 
+    positions = layout(g)
+
     # --- 5. Plot ---
     f = Figure(size = figsize)
     ax = Axis(f[1, 1])
 
     graphplot!(ax, g;
-        layout = layout,
+        layout = positions,
 
         # Nodes
         node_size = sizes_norm,
@@ -74,5 +76,5 @@ function plot_lon(
     # Colorbar
     Colorbar(f[1, 2], colormap = :viridis, label = "Fitness")
 
-    return f
+    return f, positions
 end
