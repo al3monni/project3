@@ -7,10 +7,10 @@ using CSV, DataFrames
 
 include("utils.jl")
 
-function hill_climb(start::Int, landscape::Vector{Float32}, n_bits::Int)
+function hill_climb(start::Int, landscape::Vector{Float32}, n_bits::Int; k::Int=1)
     current = start
     while true
-        neigh = neighbors(current, n_bits)
+        neigh = neighbors(current, n_bits; k=k)
         # pick the neighbor with maximum fitness (greedy)
         best_fitness = landscape[current]
         best_neighbor = current
@@ -28,12 +28,12 @@ function hill_climb(start::Int, landscape::Vector{Float32}, n_bits::Int)
     end
 end # Debug OK 
 
-function compute_basins(landscape::Vector{Float32}, local_optima::Vector{Int}, n_bits::Int)
+function compute_basins(landscape::Vector{Float32}, local_optima::Vector{Int}, n_bits::Int; k::Int=1)
     n = length(landscape)
     basin_map = Dict{Int, Int}()  # point index → optimum index
 
     for i in 1:n
-        basin_map[i] = hill_climb(i, landscape, n_bits)
+        basin_map[i] = hill_climb(i, landscape, n_bits; k=k)
     end
 
     return basin_map
@@ -54,7 +54,7 @@ function compute_basin_sizes(basin_map::Dict{Int,Int}, local_optima::Vector{Int}
     return basin_sizes
 end # Debug OK
 
-function build_LON(landscape::Vector{Float32}, local_optima::Vector{Int}, n_bits::Int)
+function build_LON(landscape::Vector{Float32}, local_optima::Vector{Int}, n_bits::Int; k::Int=1)
     
     # compute the number of local optima
     n_opt = length(local_optima)
@@ -66,14 +66,14 @@ function build_LON(landscape::Vector{Float32}, local_optima::Vector{Int}, n_bits
     opt_index_map = Dict(opt => idx for (idx, opt) in enumerate(local_optima))
 
     # compute basin for each point
-    basin_map = compute_basins(landscape, local_optima, n_bits)
+    basin_map = compute_basins(landscape, local_optima, n_bits; k=k)
 
     # create an edge set to avoid duplicates
     edges_added = Set{Tuple{Int,Int}}()
 
     for i in 1:length(landscape)
         current_basin = basin_map[i]
-        neigh = neighbors(i, n_bits)
+        neigh = neighbors(i, n_bits; k=k)
         for n in neigh
             neighbor_basin = basin_map[n]
             if neighbor_basin != current_basin
