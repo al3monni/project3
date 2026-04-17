@@ -69,3 +69,25 @@ function next_run_dir(base::String)
 
     return run_dir
 end
+
+function polar_coordinates(coordinates; base_radius = 0.1, radial_scale = 0.4)
+
+    n = length(coordinates)
+    f = Float64.(coordinates)
+
+    # Normalize fitness to [0, 1]
+    fmin = minimum(f)
+    fmax = maximum(f)
+
+    fnorm = fmax == fmin ? fill(0.5, n) : (f .- fmin) ./ (fmax - fmin)
+
+    # Radius = base circle + amplified variation
+    r = base_radius .+ radial_scale .* fnorm
+
+    θ = range(0, 2π, length = n + 1)[1:end-1]
+
+    x = r .* cos.(θ)
+    y = r .* sin.(θ)
+
+    return x, y
+end

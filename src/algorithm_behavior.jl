@@ -1,9 +1,12 @@
+include("visualization.jl")
+
 function overlay_path!(
     ax,
     xs::Vector{<:Real},
     ys::Vector{<:Real};
     color = :red
     )
+
     n = length(xs)
 
     # scatter points
@@ -14,29 +17,51 @@ function overlay_path!(
         dx = xs[i+1] - xs[i]
         dy = ys[i+1] - ys[i]
 
-        arrows!(ax,
+        arrows2d!(ax,
             [xs[i]], [ys[i]],
             [dx], [dy],
             color=color,
-            arrowsize=10,
-            linewidth=2
+            tiplength=10,
+            tipwidth=10
         )
     end
-end
+end # DEBUG OK
 
-function plot_landscape_with_path(fitness_lookup, best_path)
-    f = plot_landscape(fitness_lookup)
-    ax = f[1, 1]
+function plot_landscape_with_path(landscape, best_path)
 
-    xs = best_path
-    ys = fitness_lookup[best_path]
+    # get the landscape (2D simple representation)
+    f = plot_landscape(landscape)
 
-    overlay_path!(ax, xs, ys)
+    # overlay the best path on the landscape
+     overlay_path!(
+        f[1,1],
+        best_path,
+        landscape[best_path]
+    )
 
     return f
-end
+end # DEBUG OK
 
-function hinged_map_with_path(landscape, best_path)
+function plot_landscape_polar_with_path(landscape, best_path)
+
+    # reuse base plot
+    f = plot_landscape_polar(landscape)
+
+    # recompute coordinates (same logic!)
+    x, y = polar_coordinates(landscape)
+
+    # overlay path using your existing function
+    overlay_path!(
+        f[1,1],
+        x[best_path],
+        y[best_path]
+    )
+
+    return f
+end # DEBUG OK
+
+function plot_hinged_map_with_path(landscape, best_path, local_optima)
+
     n = length(landscape)
     bits = ceil(Int, log2(n))
     bits += isodd(bits)
@@ -51,7 +76,7 @@ function hinged_map_with_path(landscape, best_path)
         push!(y, parse(Int, b[half+1:end]; base=2))
     end
 
-    f = hinged_bitstring_map(landscape)
+    f = hinged_bitstring_map(landscape, local_optima)
     ax = f[1, 1]
 
     xs = x[best_path]
@@ -60,57 +85,38 @@ function hinged_map_with_path(landscape, best_path)
     overlay_path!(ax, xs, ys)
 
     return f
-end
-
-function overlay_lon_path!(
-    ax,
-    layout_positions,
-    best_path,
-    basin_map,
-    opt_index_map;
-    color = :red
-    )
-    # map individuals → node indices
-    node_path = [
-        opt_index_map[basin_map[i]]
-        for i in best_path
-    ]
-
-    xs = [layout_positions[i][1] for i in node_path]
-    ys = [layout_positions[i][2] for i in node_path]
-
-    overlay_path!(ax, xs, ys; color=color)
-end
+end # DEBUG OK
 
 function plot_lon_with_path(
     g,
     landscape,
     opt_index_map,
-    basin_sizes,
     basin_map,
-    best_path;
-    layout_algo = :spring
+    basin_sizes,
+    best_path
     )
 
-    f = plot_lon(g, landscape, opt_index_map, basin_sizes;
-                 layout_algo=layout_algo)
+    # reuse base plot
+    f, positions = plot_lon(
+        g,
+        landscape,
+        opt_index_map,
+        basin_sizes
+    )
+
+    node_path = [opt_index_map[basin_map[i]] for i in best_path]
+
+    @show unique(best_path)
+    @show unique(node_path)
 
     ax = f[1, 1]
 
-    # recompute layout (same as plot_lon!)
-    layout = layout_algo == :spring ? Spring() :
-             layout_algo == :kamada ? KamadaKawai() :
-             Spectral()
+    # extract coordinates from layout
+    xs = [positions[i][1] for i in node_path]
+    ys = [positions[i][2] for i in node_path]
 
-    positions = layout(g)
-
-    overlay_lon_path!(
-        ax,
-        positions,
-        best_path,
-        basin_map,
-        opt_index_map
-    )
+    # overlay path
+    overlay_path!(ax, xs, ys)
 
     return f
-end
+end # DEBUG OK

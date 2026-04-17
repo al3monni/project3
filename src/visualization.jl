@@ -1,5 +1,7 @@
 using CairoMakie
 
+include("utils.jl")
+
 function hinged_bitstring_map(landscape::Vector{Float32}, local_optima::Vector{Int} = Int[])
     n = length(landscape)
     bits = ceil(Int, log2(n))
@@ -72,26 +74,8 @@ function plot_landscape_polar(
     show_points::Bool = true,
     show_line::Bool = true
     )
-    n = length(fitness_lookup)
-    f = Float64.(fitness_lookup)
 
-    # Normalize fitness to [0, 1]
-    fmin = minimum(f)
-    fmax = maximum(f)
-
-    fnorm = if fmax == fmin
-        fill(0.5, n)
-    else
-        (f .- fmin) ./ (fmax - fmin)
-    end
-
-    # Radius = base circle + amplified variation
-    r = base_radius .+ radial_scale .* fnorm
-
-    θ = range(0, 2π, length = n + 1)[1:end-1]
-
-    x = r .* cos.(θ)
-    y = r .* sin.(θ)
+    x, y = polar_coordinates(fitness_lookup; base_radius=base_radius, radial_scale=radial_scale)
 
     f = Figure(size = (800, 800))
     ax = Axis(
