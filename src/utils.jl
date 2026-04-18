@@ -1,4 +1,7 @@
-function get_local_optima(landscape::Vector{Float32})
+using Combinatorics
+using Printf
+
+function get_local_optima(landscape::Vector{Float32}; k::Int=1)
 
     """ compute the set of local optima for a given landscape """
     
@@ -9,7 +12,7 @@ function get_local_optima(landscape::Vector{Float32})
     
     for i in 1:n
         # Check if current fitness is >= all neighbors
-        if all(landscape[i] >= landscape[j] for j in neighbors(i, bits))
+        if all(landscape[i] >= landscape[j] for j in neighbors(i, bits; k=k))
             push!(local_optima, i)
         end
     end
@@ -17,25 +20,31 @@ function get_local_optima(landscape::Vector{Float32})
     return local_optima
 end
 
-function neighbors(index::Int, n_bits::Int)
-
-    """ optimized function to generate the neighbours of a given individual """
-
+function neighbors(index::Int, n_bits::Int; k::Int=1)
     neigh = Int[]
 
-    for i in 0:n_bits-1
+    for d in 1:k
+        for positions in combinations(0:n_bits-1, d)
+            mask = 0
+            for i in positions
+                mask |= (1 << i)
+            end
 
-        neighbor = index ⊻ (1 << i)  # flip bit i
+            neighbor = index ⊻ mask
 
-        if neighbor != 0
-            push!(neigh, neighbor)  
+            if neighbor != 0
+                push!(neigh, neighbor)
+            end
         end
     end
 
     return neigh
 end
 
-using Printf
+function to_bitstring(x::Int, n_bits::Int)
+    s = string(x, base=2)
+    return lpad(s, n_bits, '0')
+end
 
 function next_run_dir(base::String)
     # ensure base directory exists
@@ -59,6 +68,28 @@ function next_run_dir(base::String)
     mkpath(run_dir)
 
     return run_dir
+end
+
+function polar_coordinates(coordinates; base_radius = 0.1, radial_scale = 0.4)
+
+    n = length(coordinates)
+    f = Float64.(coordinates)
+
+    # Normalize fitness to [0, 1]
+    fmin = minimum(f)
+    fmax = maximum(f)
+
+    fnorm = fmax == fmin ? fill(0.5, n) : (f .- fmin) ./ (fmax - fmin)
+
+    # Radius = base circle + amplified variation
+    r = base_radius .+ radial_scale .* fnorm
+
+    θ = range(0, 2π, length = n + 1)[1:end-1]
+
+    x = r .* cos.(θ)
+    y = r .* sin.(θ)
+
+    return x, y
 end
 
 function save_results(algorithm::String, file::String, data)

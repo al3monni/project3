@@ -5,6 +5,7 @@ include("local_optima_network.jl")
 include("plot_lon.jl")
 include("genetic.jl")
 include("nsga2.jl")
+include("algorithm_behavior.jl")
 
 using YAML
 using Statistics
@@ -17,6 +18,7 @@ const CONFIG = YAML.load_file(joinpath(@__DIR__, "parameters.yaml"))
 const DATASETS = CONFIG["datasets"]
 const DATASET_NAME = CONFIG["landscape"]["dataset_name"]
 const PENALTY = CONFIG["landscape"]["penalty"]
+const NEIGHBORHOOD_SIZE = CONFIG["neighborhood"]["size"]
 
 const N_RUNS = CONFIG["experiment"]["n_runs"]
 const POPSIZE = CONFIG["experiment"]["popsize"]
@@ -27,36 +29,56 @@ const GA_PARAMS = Dict(
     :pc => CONFIG["algorithms"]["GA"]["pc"],
     :pm => CONFIG["algorithms"]["GA"]["pm"]
     )
-    const PSO_PARAMS = Dict(
-        :w => CONFIG["algorithms"]["PSO"]["w"],
-        :c1 => CONFIG["algorithms"]["PSO"]["c1"],
-        :c2 => CONFIG["algorithms"]["PSO"]["c2"]
-        )
-        const NSGA2_PARAMS = Dict(
-            :pc => CONFIG["algorithms"]["NSGA2"]["pc"],
-            :pm => CONFIG["algorithms"]["NSGA2"]["pm"]
-            )
-            
+const PSO_PARAMS = Dict(
+    :w => CONFIG["algorithms"]["PSO"]["w"],
+    :c1 => CONFIG["algorithms"]["PSO"]["c1"],
+    :c2 => CONFIG["algorithms"]["PSO"]["c2"]
+    )
+const NSGA2_PARAMS = Dict(
+    :pc => CONFIG["algorithms"]["NSGA2"]["pc"],
+    :pm => CONFIG["algorithms"]["NSGA2"]["pm"]
+    )
+    
 # ============== Visualizations ==============
 
 function run_visualizations()
+
     println("\nRunning landscape visualizations...")
 
     for dataset in DATASETS
+
         landscape = load_landscape(dataset)
         n = length(landscape)
         n_bits = ceil(Int, log2(n))
-        local_optima = get_local_optima(landscape)
+        local_optima = get_local_optima(landscape; k=NEIGHBORHOOD_SIZE)
 
         f1 = plot_landscape(landscape)
         f2 = plot_landscape_polar(landscape)
         f3 = hinged_bitstring_map(landscape, local_optima)
 
-        g, opt_index_map, basin_map = build_LON(landscape, local_optima, n_bits)
+        # ==================== LON ====================
+        
+        # Build LON
+        g, opt_index_map, basin_map = build_LON(landscape, local_optima, n_bits; k=NEIGHBORHOOD_SIZE)
+
+        # Compute basin sizes
         basin_sizes = compute_basin_sizes(basin_map, local_optima)
+
+        # Export LON
+        #export_LON(landscape, g, opt_index_map, basin_sizes)
+
+        # Plot LON
         f4 = plot_lon(g, landscape, opt_index_map, basin_sizes)
 
-        out_path = mkpath(joinpath(@__DIR__, "..", "img"))
+        #display(f1)
+        #display(f2)
+        #display(f3)
+        #display(f4)
+
+        img = "img$k"
+        out_path = joinpath(@__DIR__, "..", img)
+        mkpath(out_path)
+
         dataset_short = split(dataset, ".")[1]
 
         save("$out_path/$(dataset_short)_landscape.png", f1)
@@ -66,7 +88,6 @@ function run_visualizations()
 
         println("  Saved visualizations for $dataset")
     end
-
 end
 
 # ============== Run Experiment ==============
@@ -134,9 +155,8 @@ function main()
         save_results("GA", output_path, results)
 
         # Run PSO
-        println("\nRunning PSO...")
-        results = run(landscape, PSO!, POPSIZE, GENERATIONS, PSO_PARAMS, N_RUNS)
-        save_results("PSO", output_path, results)
+        # println("\nRunning PSO...")
+        # dataset_results["PSO"] = run(landscape, PSO!, POPSIZE, GENERATIONS, PSO_PARAMS, N_RUNS)
 
         # # Run NSGA2
         # println("\nRunning NSGA2...")
@@ -148,4 +168,70 @@ function main()
 
 end
 
-main()
+# ============== Test Behavior ===============
+
+function test_behavior()
+
+    # extract dataset
+    dataset = DATASETS[1]
+
+    # load landscape
+    landscape = load_landscape(dataset)
+
+    # run GA and get history
+    history, _ = GA!(landscape, 10, 200)
+
+    # extract best individual from history
+    best_path = Int.(history[6, :])
+
+    n = length(landscape)
+    n_bits = ceil(Int, log2(n))
+
+    # compute the local optima
+    local_optima = get_local_optima(landscape; k=NEIGHBORHOOD_SIZE)
+
+    # =================== Plots ===================
+
+    f1 = plot_landscape_with_path(landscape, best_path) # DEBUG OK - poor visualization due to 2D projection
+
+    f2 = plot_landscape_polar_with_path(landscape, best_path)
+
+    f3 = plot_hinged_map_with_path(landscape, best_path, local_optima)
+
+    # ==================== LON ====================
+
+    # Build LON
+    g, opt_index_map, basin_map = build_LON(landscape, local_optima, n_bits; k=NEIGHBORHOOD_SIZE)
+
+    # Compute basin sizes
+    basin_sizes = compute_basin_sizes(basin_map, local_optima)
+ 
+    # Export LON
+    # export_LON(landscape, g, opt_index_map, basin_sizes)
+
+    # Plot LON
+    f4 = plot_lon_with_path(g, landscape, opt_index_map, basin_map, basin_sizes, best_path)
+
+    # =================== Saving ==================
+
+    dir = "img_behavior_test"
+    out_path = joinpath(@__DIR__, "..", dir)
+    mkpath(out_path)
+
+    dataset_short = split(dataset, ".")[1]
+
+    save("$out_path/$(dataset_short)_landscape.png", f1)
+    save("$out_path/$(dataset_short)_landscape_polar.png", f2)
+    save("$out_path/$(dataset_short)_hinged_bitstring_map.png", f3)
+    save("$out_path/$(dataset_short)_lon.png", f4)
+
+    display(f1)
+    display(f2)
+    display(f3)
+    display(f4)
+
+end
+
+test_behavior()
+
+#main()

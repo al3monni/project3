@@ -33,6 +33,7 @@ function compute!(history, fitnesses, population, generation)
     history[3, generation] = mean(fitnesses)
     history[4, generation] = std(fitnesses)
     history[5, generation] = entropy(population)
+    history[6, generation] = bitstring_to_index(population[argmax(fitnesses)])
 end
 
 mutable struct Particle
@@ -76,7 +77,7 @@ function PSO!(
     d = n_bits
     x_best = copy(population[1].x)
     y_best = invalid_fitness
-    history = zeros(Float64, 5, k_max)
+    history = zeros(Float64, 6, k_max)
 
     runtime = @elapsed begin
         # initial evaluation
@@ -136,7 +137,6 @@ function PSO!(
     return history, Result(best.y_best, best.x_best, population, k_max, n_evals, runtime)
 end
 
-
 # ==================== Genetic Algorithm ====================
 
 function GA!(
@@ -148,7 +148,8 @@ function GA!(
     M::EvoLP.Mutator=EvoLP.BitwiseMutator(0.05),
     pc=0.9,
     pm=-1.0
-)
+    )
+
     L = length(landscape)
     n_bits = ceil(Int, log2(L))
 
@@ -169,7 +170,7 @@ function GA!(
     # Initial evaluation
     fitnesses .= evaluate.(population)
 
-    history = zeros(Float64, 5, k_max)
+    history = zeros(Float64, 6, k_max)
 
     runtime = @elapsed for gen in 1:k_max
         # EvoLP selectors minimize, so maximize f by minimizing -f
