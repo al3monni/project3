@@ -1,31 +1,7 @@
 using EvoLP
 using Statistics
+include("utils.jl")
 
-function entropy(population::Vector{BitVector})
-    n = length(population)
-    if n == 0
-        return 0.0
-    end
-
-    n_bits = length(population[1])
-    bit_counts = zeros(Int, n_bits)
-
-    for individual in population
-        for j in 1:n_bits
-            bit_counts[j] += individual[j] ? 1 : 0
-        end
-    end
-
-    ent = 0.0
-    for count in bit_counts
-        p = count / n
-        if p > 0 && p < 1
-            ent -= p * log2(p) + (1 - p) * log2(1 - p)
-        end
-    end
-
-    return ent
-end
 
 function compute!(history, fitnesses, population, generation)
     history[1, generation] = minimum(fitnesses)
@@ -134,7 +110,7 @@ function PSO!(
     best = population[best_i]
     n_evals = (1 + k_max) * length(population)
 
-    return history, Result(best.y_best, best.x_best, population, k_max, n_evals, runtime)
+    return history, Result(best.y_best, best.x_best, population, k_max, n_evals, runtime), nothing
 end
 
 # ==================== Genetic Algorithm ====================
@@ -213,5 +189,5 @@ function GA!(
     best = population[best_i]
     n_evals = (k_max + 1) * popsize
 
-    return history, Result(fitnesses[best_i], best, population, k_max, n_evals, runtime)
+    return history, Result(fitnesses[best_i], best, population, k_max, n_evals, runtime), nothing
 end

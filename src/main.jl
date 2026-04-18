@@ -1,8 +1,5 @@
-include("data_load.jl")
 include("utils.jl")
 include("visualization.jl")
-include("local_optima_network.jl")
-include("plot_lon.jl")
 include("genetic.jl")
 include("nsga2.jl")
 include("algorithm_behavior.jl")
@@ -96,16 +93,26 @@ function run(landscape, algorithm, pop_size, k_max, params, n_runs) # -> average
     
     histories = Vector{Any}(undef, n_runs) # -> [history1, history2, ...] where history_i is [5, generations]
     results = Vector{Any}(undef, n_runs)
-    
-    for i in 1:n_runs
+    pareto_fronts = Vector{Any}(undef, n_runs)
+
+     for i in 1:n_runs
         println("  Run $i / $n_runs")
-        histories[i], results[i] = algorithm(landscape, pop_size, k_max; params...)  # -> [5, generations], EvoLP.Result
+        histories[i], results[i], pareto_fronts[i] = algorithm(landscape, pop_size, k_max; params...) # -> [5, generations], EvoLP.Result, pareto_front
     end
     
     # Compute averaged history across runs
     hist_stack = cat(histories...; dims=3)     # (5, generations, n_runs)
     avg_history = mean(hist_stack; dims=3)     # (5, generations, 1)
     avg_history = dropdims(avg_history; dims=3)  # (5, generations)
+
+    # Compute averaged pareto front across runs (for NSGA2)
+    if !isempty(pareto_fronts) && pareto_fronts[1] !== nothing
+        all_solutions = vcat(pareto_fronts...)
+        unique_solutions = unique(all_solutions)
+        pareto_front = pareto_filter(unique_solutions)
+    else
+        pareto_front = nothing
+    end
     
     # Compute statistics across runs
     bests = [r.fxstar for r in results]
@@ -123,7 +130,7 @@ function run(landscape, algorithm, pop_size, k_max, params, n_runs) # -> average
     println("  Max best fitness:  $(round(max_best, digits=4))")
     println()
 
-    return avg_history, avg_best, std_best, min_best, max_best
+    return avg_history, avg_best, std_best, min_best, max_best, pareto_front
 end
 
 function main()
@@ -155,12 +162,14 @@ function main()
         save_results("GA", output_path, results)
 
         # Run PSO
-        # println("\nRunning PSO...")
-        # dataset_results["PSO"] = run(landscape, PSO!, POPSIZE, GENERATIONS, PSO_PARAMS, N_RUNS)
+        println("\nRunning PSO...")
+        results = run(landscape, PSO!, POPSIZE, GENERATIONS, PSO_PARAMS, N_RUNS)
+        save_results("PSO", output_path, results)
 
-        # # Run NSGA2
-        # println("\nRunning NSGA2...")
-        # dataset_results["NSGA2"] = run(landscape, NSGA2!, POPSIZE, GENERATIONS, NSGA2_PARAMS, N_RUNS)
+        # Run NSGA2
+        println("\nRunning NSGA2...")
+        results = run(landscape, NSGA2!, POPSIZE, GENERATIONS, NSGA2_PARAMS, N_RUNS)
+        save_results("NSGA2", output_path, results)
 
     end
 
@@ -232,6 +241,6 @@ function test_behavior()
 
 end
 
-test_behavior()
+# test_behavior()
 
-#main()
+main()

@@ -1,5 +1,71 @@
 using Combinatorics
 using Printf
+using HDF5
+using Statistics
+
+# ===========================================================
+# DATA LOADING AND FITNESS CALCULATION
+# ===========================================================
+
+# ============= Landscape and Fitness Functions =============
+
+function load_landscape(filename::String)
+
+    # obtain a reference for the hdf5 file
+    h5open("train/"*filename, "r") do f
+
+        # select the "accuracies" dataset
+        data = read(f[DATASET_NAME])
+
+        # compute the mean of each row
+        return vec(mean(data, dims=2))
+    end
+end
+
+function get_fitness(x::Integer, lookup::Vector{Float32})
+
+    # handle out-of-bounds cases
+    if x == 0 || x > length(lookup)
+        return 0
+    end
+    
+    # compute the penalty based on feature number
+    penalty = PENALTY * count_ones(x)
+    
+    # return the penalized fitness
+    return lookup[x] - penalty
+end
+
+# ==================== Triangle Function ====================
+
+function triangle_function(b::Integer; m::Float32=1.0f0, s::Int=4)
+
+    r = abs(b)
+    t = mod(r, 2s)
+
+    if t <= s
+        return m * t
+    else
+        return m * (2s - t)
+    end
+end
+
+function triangle_landscape(n::Integer; m::Float32=1.0f0, s::Int=4)
+
+    # preallocate the lookup table
+    lookup = Vector{Float32}(undef, n)
+
+    # precompute and store triangle fitness values
+    @inbounds for x in 1:n                              # pay attention here
+        lookup[x] = triangle_function(x; m=m, s=s)
+    end
+
+    return lookup
+end
+
+# =========================================================
+# LOCAL OPTIMA AND NEIGHBORHOOD CALCULATIONS
+# =========================================================
 
 function get_local_optima(landscape::Vector{Float32}; k::Int=1)
 
@@ -40,6 +106,10 @@ function neighbors(index::Int, n_bits::Int; k::Int=1)
 
     return neigh
 end
+
+# =========================================================
+# MISCELLANEOUS UTILITY FUNCTIONS
+# =========================================================
 
 function to_bitstring(x::Int, n_bits::Int)
     s = string(x, base=2)
@@ -93,9 +163,10 @@ function polar_coordinates(coordinates; base_radius = 0.1, radial_scale = 0.4)
 end
 
 function save_results(algorithm::String, file::String, data)
-    history, avg_best, std_best, min_best, max_best = data
+    history, avg_best, std_best, min_best, max_best, pareto_front = data
 
-    dataset_name = split(split(file, "/")[end-1], "_")[1]  # extract dataset name from path
+    dataset_name = split(split(file, "/")[end], "_")[1]  # extract dataset name from path
+    println(file)
 
     # History graph
     evolution_plot = plot_evolution(history, "$algorithm on $dataset_name")
@@ -105,9 +176,49 @@ function save_results(algorithm::String, file::String, data)
     entropy_plot = plot_entropy(history, "$algorithm on $dataset_name")
     save(joinpath(OUTPUT_DIR, "$(dataset_name)_$(algorithm)_entropy.png"), entropy_plot)
 
+    # Pareto front graph (for NSGA2)
+    if pareto_front !== nothing
+        pareto_plot = plot_pareto_front(pareto_front, "Pareto Front on $dataset_name")
+        save(joinpath(OUTPUT_DIR, "$(dataset_name)_$(algorithm)_pareto.png"), pareto_plot)
+    end
+
     # Append summary other stats to output file
     open(file, "a") do io
         println(io, "$algorithm,$avg_best,$std_best,$min_best,$max_best")
     end
 
+end
+
+function entropy(population::Vector{BitVector})
+    n = length(population)
+    if n == 0
+        return 0.0
+    end
+
+    n_bits = length(population[1])
+    bit_counts = zeros(Int, n_bits)
+
+    for individual in population
+        for j in 1:n_bits
+            bit_counts[j] += individual[j] ? 1 : 0
+        end
+    end
+
+    ent = 0.0
+    for count in bit_counts
+        p = count / n
+        if p > 0 && p < 1
+            ent -= p * log2(p) + (1 - p) * log2(1 - p)
+        end
+    end
+
+    return ent
+end
+
+function bitvector_to_index(bits::BitVector)
+    value = 0
+    for b in bits
+        value = (value << 1) | (b ? 1 : 0)
+    end
+    return value
 end

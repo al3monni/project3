@@ -8,8 +8,8 @@ neighborhood:
 # Datasets to use
 datasets:
   - "01-breast-w_lr_F.h5"
-  - "05-credit-a_rf_F.h5"
-  - "08-letter-r_knn_F.h5"
+  # - "05-credit-a_rf_F.h5"
+  # - "08-letter-r_knn_F.h5"
 
 # Landscape parameters
 landscape:

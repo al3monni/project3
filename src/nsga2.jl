@@ -9,53 +9,64 @@ end
 
 mutable struct Individual
     bits::BitVector
-    objectives::Tuple{Float64, Float64}
+    objectives::Tuple{Float64, Float64} # (accuracy, -num_features)
     rank::Int
     crowding::Float64
 end
 
 function NSGA2!(
-    landscape::Landscape,
-    population::Vector{Individual},
-    k_max::Integer;
+    landscape::Vector{Float32},
+    popsize::Int,
+    k_max::Int;
     pc::Float64 = 0.9,
-    pm::Float64 = -1.0,
-    seed::Int = 42,
-    verbose::Bool = true
+    pm::Float64 = -1.0
     )
-    Random.seed!(seed)
 
-    n_bits = landscape.n_features
-    popsize = length(population)
+    L = length(landscape)
+    n_bits = ceil(Int, log2(L))
     pm = pm < 0 ? 1.0 / n_bits : pm
 
+    population = make_population(popsize, n_bits)
+
+    # Initial evaluation
+    for ind in population
+        ind.objectives = evaluate_multiobjective(ind.bits, landscape)
+    end
+
+    # Initialize metadata
+    update_population_metadata!(population)
+
+    # History tracking (5 rows: min, max, mean, std, entropy)
+    history = zeros(Float64, 5, k_max)
+
     runtime = @elapsed begin
-        for ind in population
-            evaluate!(ind, landscape)
-        end
-        update_population_metadata!(population)
-
         for gen in 1:k_max
-            offspring = create_offspring(population, popsize, pc, pm)
 
+            offspring = create_offspring(population, popsize, pc, pm)
             for ind in offspring
-                evaluate!(ind, landscape)
+                ind.objectives = evaluate_multiobjective(ind.bits, landscape)
             end
 
+            # Environmental selection
             combined = vcat(population, offspring)
             population = environmental_selection(combined, popsize)
+
+            # Update metadata
             update_population_metadata!(population)
 
-            if verbose
-                front = get_pareto_front(population)
-                best_acc = maximum(ind.objectives[1] for ind in front)
-                min_features = minimum(Int(-ind.objectives[2]) for ind in front)
-                println(
-                    "Gen $gen | Front 1: $(length(front)) solutions | " *
-                    "Best acc: $(round(best_acc, digits = 6)) | " *
-                    "Min features in F1: $min_features"
-                )
-            end
+            # Record history metrics
+            # For multi-objective, we track the best accuracy from the Pareto front
+            front = get_pareto_front(population)
+            best_acc = maximum(ind.objectives[1] for ind in front)
+            min_features = minimum(Int(-ind.objectives[2]) for ind in front)
+
+            # Compute statistics on population's primary objective (accuracy)
+            accs = [ind.objectives[1] for ind in population]
+            history[1, gen] = minimum(accs)
+            history[2, gen] = maximum(accs)
+            history[3, gen] = mean(accs)
+            history[4, gen] = std(accs)
+            history[5, gen] = entropy([ind.bits for ind in population])
         end
     end
 
@@ -63,59 +74,23 @@ function NSGA2!(
     best = best_by_accuracy(pareto_front)
     n_evals = (1 + k_max) * popsize
 
-    return (
-        best_accuracy = best.objectives[1],
-        best_solution = copy(best.bits),
-        pareto_front = pareto_front,
-        population = population,
-        generations = k_max,
-        n_evals = n_evals,
-        runtime = runtime
-    )
+    return history, Result(best.objectives[1], best.bits, population, k_max, n_evals, runtime), pareto_front
 end
 
-function infer_n_features(num_rows::Int)
-    n = round(Int, log2(num_rows + 1))
-    if 2^n - 1 != num_rows
-        error("The number of rows does not match 2^n - 1.")
-    end
-    return n
-end
+# =========================================================
+# Utility Functions
+# =========================================================
 
-function bitvector_to_index(bits::BitVector)
-    value = 0
-    for bit in bits
-        value = (value << 1) | (bit ? 1 : 0)
-    end
-    return value
-end
+function evaluate_multiobjective(bits::BitVector, landscape::Vector{Float32})
 
-function lookup_accuracy(bits::BitVector, landscape::Landscape)
-    idx = bitvector_to_index(bits)
-    if idx == 0
-        return -Inf
-    elseif idx > length(landscape.mean_accuracies)
-        error("Bitvector index out of bounds for landscape lookup.")
-    end
-    return landscape.mean_accuracies[idx]
-end
+    x = bitvector_to_index(bits)
+    n_features = count_ones(x)
 
-function num_selected_features(bits::BitVector)
-    return count(bits)
-end
-
-function evaluate_multiobjective(bits::BitVector, landscape::Landscape)
-    n_features = num_selected_features(bits)
-    if n_features == 0
-        return (-Inf, -Inf)
+    if n_features == 0 || x > length(landscape)
+        return (0.0, 0.0)
     end
 
-    accuracy = lookup_accuracy(bits, landscape)
-    return (accuracy, -Float64(n_features))
-end
-
-function evaluate!(ind::Individual, landscape::Landscape)
-    ind.objectives = evaluate_multiobjective(ind.bits, landscape)
+    return (landscape[bitvector_to_index(bits)], -Float64(n_features))
 end
 
 function repair_zero_features!(bits::BitVector)
@@ -134,6 +109,10 @@ end
 function make_population(popsize::Int, n_bits::Int)
     return [random_individual(n_bits) for _ in 1:popsize]
 end
+
+# =========================================================
+# Dominance and Non-dominated Sorting
+# =========================================================
 
 function dominates(a::Individual, b::Individual)
     a1, a2 = a.objectives
@@ -193,6 +172,10 @@ function fast_non_dominated_sort!(population::Vector{Individual})
     return fronts
 end
 
+# =========================================================
+# Crowding Distance
+# =========================================================
+
 function assign_crowding_distance!(population::Vector{Individual}, front::Vector{Int})
     isempty(front) && return nothing
 
@@ -239,6 +222,10 @@ function update_population_metadata!(population::Vector{Individual})
     end
     return fronts
 end
+
+# =========================================================
+# Genetic Operators
+# =========================================================
 
 function better(a::Individual, b::Individual)
     if a.rank < b.rank
@@ -331,6 +318,11 @@ function environmental_selection(combined::Vector{Individual}, popsize::Int)
     return new_population
 end
 
+# =========================================================
+# Pareto Front Utilities
+# =========================================================
+
+
 function get_pareto_front(population::Vector{Individual})
     fronts = fast_non_dominated_sort!(population)
     return isempty(fronts) ? Individual[] : population[fronts[1]]
@@ -374,4 +366,21 @@ function summarize_pareto_front(pareto_front::Vector{Individual})
     pareto_size = length(unique_front)
 
     return best_acc, min_features, pareto_size, unique_front
+end
+
+function pareto_filter(solutions::Vector{Individual})
+    non_dominated = Individual[]
+    for sol in solutions
+        dominated = false
+        for other in solutions
+            if dominates(other, sol)
+                dominated = true
+                break
+            end
+        end
+        if !dominated
+            push!(non_dominated, sol)
+        end
+    end
+    return non_dominated
 end
