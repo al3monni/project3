@@ -60,3 +60,23 @@ function next_run_dir(base::String)
 
     return run_dir
 end
+
+function save_results(algorithm::String, file::String, data)
+    history, avg_best, std_best, min_best, max_best = data
+
+    dataset_name = split(split(file, "/")[end-1], "_")[1]  # extract dataset name from path
+
+    # History graph
+    evolution_plot = plot_evolution(history, "$algorithm on $dataset_name")
+    save(joinpath(OUTPUT_DIR, "$(dataset_name)_$(algorithm)_evolution.png"), evolution_plot)
+
+    # Entropy graph
+    entropy_plot = plot_entropy(history, "$algorithm on $dataset_name")
+    save(joinpath(OUTPUT_DIR, "$(dataset_name)_$(algorithm)_entropy.png"), entropy_plot)
+
+    # Append summary other stats to output file
+    open(file, "a") do io
+        println(io, "$algorithm,$avg_best,$std_best,$min_best,$max_best")
+    end
+
+end

@@ -114,7 +114,7 @@ function plot_landscape_polar(
     return f
 end
 
-function plot_history(history; title="Fitness History")
+function plot_evolution(history, title)
     generations = 1:size(history, 2)
     f = Figure(size = (900, 500))
     ax = Axis(
@@ -122,7 +122,7 @@ function plot_history(history; title="Fitness History")
         title = title,
         xlabel = "Generation",
         ylabel = "Fitness",
-        limits = (0, GENERATIONS, 0.94, 0.975)
+        limits = (0, GENERATIONS, 0.7, 1.0)
     )
 
     # Plot mean fitness
@@ -134,3 +134,22 @@ function plot_history(history; title="Fitness History")
     axislegend(ax)    
     return f
 end
+
+function plot_entropy(history, title)
+    generations = 1:size(history, 2)
+    f = Figure(size = (900, 500))
+    ax = Axis(
+        f[1, 1],
+        title = title,
+        xlabel = "Generation",
+        ylabel = "Entropy"
+    )
+
+    lines!(ax, generations, history[5, :], label = "Population Entropy", color=:red)
+    axislegend(ax)    
+    return f
+end
+
+# 0.7 - 1.0
+# 0.55 - 0.9
+# 0 - 1.0

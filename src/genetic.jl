@@ -57,7 +57,7 @@ function PSO!(
     landscape::Vector{Float32},
     popsize::Int64,
     k_max::Int64;
-    w=1.0, c1=1.0, c2=1.0, maximize=true
+    w=1.0, c1=1.0, c2=1.0, vmax=6.0, maximize=true
 )
     L = length(landscape)
     n_bits = ceil(Int, log2(L))

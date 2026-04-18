@@ -94,11 +94,13 @@ function run(landscape, algorithm, pop_size, k_max, params, n_runs) # -> average
     max_best = maximum(bests)
 
     # Print summary statistics
-    println("  Summary across $n_runs runs:")
-    println("    Mean best fitness: $(round(avg_best, digits=4))")
-    println("    Std best fitness:  $(round(std_best, digits=4))")
-    println("    Min best fitness:  $(round(min_best, digits=4))")
-    println("    Max best fitness:  $(round(max_best, digits=4))")
+    println()
+    println("Summary across $n_runs runs:")
+    println("  Mean best fitness: $(round(avg_best, digits=4))")
+    println("  Std best fitness:  $(round(std_best, digits=4))")
+    println("  Min best fitness:  $(round(min_best, digits=4))")
+    println("  Max best fitness:  $(round(max_best, digits=4))")
+    println()
 
     return avg_history, avg_best, std_best, min_best, max_best
 end
@@ -112,8 +114,6 @@ function main()
 
     println("Output will be saved to: $OUTPUT_DIR")
 
-    all_results = Dict()
-
     for dataset in DATASETS
         println("\n" * "="^60)
         println("EXPERIMENT: $dataset")
@@ -122,33 +122,26 @@ function main()
         landscape = load_landscape(dataset)
         println("Loaded landscape with $(length(landscape)) points")
 
-        dataset_results = Dict()
+        # Initialize results file for this dataset
+        output_path = joinpath(OUTPUT_DIR, "$(split(dataset, ".")[1])_best_fitness.csv")
+        open(output_path, "w") do io
+            println(io, "algorithm,mean_best,std_best,min_best,max_best")
+        end
 
         # Run GA
         println("\nRunning GA...")
-        dataset_results["GA"] = run(landscape, GA!, POPSIZE, GENERATIONS, GA_PARAMS, N_RUNS)
+        results = run(landscape, GA!, POPSIZE, GENERATIONS, GA_PARAMS, N_RUNS)
+        save_results("GA", output_path, results)
 
         # Run PSO
         println("\nRunning PSO...")
-        dataset_results["PSO"] = run(landscape, PSO!, POPSIZE, GENERATIONS, PSO_PARAMS, N_RUNS)
+        results = run(landscape, PSO!, POPSIZE, GENERATIONS, PSO_PARAMS, N_RUNS)
+        save_results("PSO", output_path, results)
 
         # # Run NSGA2
         # println("\nRunning NSGA2...")
         # dataset_results["NSGA2"] = run(landscape, NSGA2!, POPSIZE, GENERATIONS, NSGA2_PARAMS, N_RUNS)
 
-        all_results[dataset] = dataset_results
-
-        # # Save results to CSV
-        # run_data = []
-        # for (algo, data) in dataset_results
-        #     avg_history, avg_best, std_best, min_best, max_best = data
-        #     fitness = avg_best  # or min_best depending on the context
-
-        #     push!(run_data, (
-        #         algorithm = algo,
-        #         best_fitness = fitness
-        #     ))
-        # end
     end
 
     println("Output saved to: $OUTPUT_DIR")
