@@ -142,13 +142,14 @@ function main()
 
     println("Output will be saved to: $OUTPUT_DIR")
 
-    for dataset in DATASETS
+    for dataset in keys(DATASETS)
         println("\n" * "="^60)
         println("EXPERIMENT: $dataset")
         println("="^60)
 
         landscape = load_landscape(dataset)
         println("Loaded landscape with $(length(landscape)) points")
+        println("Max: $(maximum(landscape)), Min: $(minimum(landscape))")
 
         # Initialize results file for this dataset
         output_path = joinpath(OUTPUT_DIR, "$(split(dataset, ".")[1])_best_fitness.csv")
@@ -159,17 +160,17 @@ function main()
         # Run GA
         println("\nRunning GA...")
         results = run(landscape, GA!, POPSIZE, GENERATIONS, GA_PARAMS, N_RUNS)
-        save_results("GA", output_path, results)
+        save_results("GA", dataset, output_path, results)
 
         # Run PSO
         println("\nRunning PSO...")
         results = run(landscape, PSO!, POPSIZE, GENERATIONS, PSO_PARAMS, N_RUNS)
-        save_results("PSO", output_path, results)
+        save_results("PSO", dataset, output_path, results)
 
         # Run NSGA2
         println("\nRunning NSGA2...")
         results = run(landscape, NSGA2!, POPSIZE, GENERATIONS, NSGA2_PARAMS, N_RUNS)
-        save_results("NSGA2", output_path, results)
+        save_results("NSGA2", dataset, output_path, results)
 
     end
 
@@ -182,7 +183,7 @@ end
 function test_behavior()
 
     # extract dataset
-    dataset = DATASETS[1]
+    dataset = keys(DATASETS)[1]
 
     # load landscape
     landscape = load_landscape(dataset)

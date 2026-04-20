@@ -162,14 +162,13 @@ function polar_coordinates(coordinates; base_radius = 0.1, radial_scale = 0.4)
     return x, y
 end
 
-function save_results(algorithm::String, file::String, data)
+function save_results(algorithm::String, dataset::String, file::String, data)
     history, avg_best, std_best, min_best, max_best, pareto_front = data
 
-    dataset_name = split(split(file, "/")[end], "_")[1]  # extract dataset name from path
-    println(file)
+    dataset_name = split(dataset, ".")[1]
 
     # History graph
-    evolution_plot = plot_evolution(history, "$algorithm on $dataset_name")
+    evolution_plot = plot_evolution(history, dataset, "$algorithm on $dataset_name")
     save(joinpath(OUTPUT_DIR, "$(dataset_name)_$(algorithm)_evolution.png"), evolution_plot)
 
     # Entropy graph

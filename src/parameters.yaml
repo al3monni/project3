@@ -7,9 +7,15 @@ neighborhood:
 
 # Datasets to use
 datasets:
-  - "01-breast-w_lr_F.h5"
-  # - "05-credit-a_rf_F.h5"
-  # - "08-letter-r_knn_F.h5"
+  01-breast-w_lr_F.h5: 
+    min: 0.78780484
+    max: 0.97012186
+  05-credit-a_rf_F.h5:
+    min: 0.5204083
+    max: 0.8912626
+  08-letter-r_knn_F.h5:
+    min: 0.038708337
+    max: 0.9563333
 
 # Landscape parameters
 landscape:

@@ -336,7 +336,10 @@ end
 # EXPERIMENTAL VISUALIZATIONS
 # =========================================================
 
-function plot_evolution(history, title)
+function plot_evolution(history, dataset, title)
+
+    sigma = (DATASETS[dataset]["max"] - DATASETS[dataset]["min"]) * 0.1  # add 10% margin above max for better visualization
+
     generations = 1:size(history, 2)
     f = Figure(size = (900, 500))
     ax = Axis(
@@ -344,7 +347,7 @@ function plot_evolution(history, title)
         title = title,
         xlabel = "Generation",
         ylabel = "Fitness",
-        limits = (0, GENERATIONS, 0.7, 1.0)
+        limits = (0, GENERATIONS, DATASETS[dataset]["min"], DATASETS[dataset]["max"] + sigma)
     )
 
     # Plot mean fitness
@@ -353,7 +356,10 @@ function plot_evolution(history, title)
     # Plot min/max as a shaded area
     band!(ax, generations, history[1, :], history[2, :], color=:blue, alpha=0.3, label="Min-Max Range")
 
-    axislegend(ax)    
+    # Plot optimal fitness as a dashed line
+    hlines!(ax, [DATASETS[dataset]["max"]], color=:red, linestyle=:dash, label="Optimal Fitness")
+
+    axislegend(position = :rb)
     return f
 end
 
