@@ -38,7 +38,7 @@ end
 
 # ==================== Triangle Function ====================
 
-function triangle_function(b::Integer; m::Float32=1.0f0, s::Int=4)
+function triangle_function(b::Integer; m::Int=1, s::Int=4)
 
     r = abs(b)
     t = mod(r, 2s)
@@ -50,14 +50,24 @@ function triangle_function(b::Integer; m::Float32=1.0f0, s::Int=4)
     end
 end
 
-function triangle_landscape(n::Integer; m::Float32=1.0f0, s::Int=4)
+function asymmetric_triangle_function(b::Integer; m::Int=1, s::Int=4)
+    
+    if b < 31
+        return triangle_function(b; m=m, s=s)
+    else
+        return triangle_function(b; m=6, s=s)
+    end
+    
+end
+
+function triangle_landscape(n::Integer; m::Int=1, s::Int=4)
 
     # preallocate the lookup table
-    lookup = Vector{Float32}(undef, n)
+    lookup = Vector{Int}(undef, n)
 
     # precompute and store triangle fitness values
-    @inbounds for x in 1:n                              # pay attention here
-        lookup[x] = triangle_function(x; m=m, s=s)
+    @inbounds for x in 1:2^n                              # pay attention here
+        lookup[x] = count_ones(triangle_function(x; m=m, s=s))
     end
 
     return lookup
@@ -67,7 +77,7 @@ end
 # LOCAL OPTIMA AND NEIGHBORHOOD CALCULATIONS
 # =========================================================
 
-function get_local_optima(landscape::Vector{Float32}; k::Int=1)
+function get_local_optima(landscape::Vector{Float32}; k::Int=1, triangle::Bool=false)
 
     """ compute the set of local optima for a given landscape """
     
@@ -75,10 +85,18 @@ function get_local_optima(landscape::Vector{Float32}; k::Int=1)
     bits = ceil(Int, log2(n))
     
     local_optima = Int[]
-    
+
     for i in 1:n
-        # Check if current fitness is >= all neighbors
-        if all(landscape[i] >= landscape[j] for j in neighbors(i, bits; k=k))
+        if triangle
+            idx = i - 1
+        else
+            idx = i
+        end
+        neighborhood = neighbors(idx, bits; k=k)
+        is_optimum = all(landscape[i] >= landscape[j] for j in neighborhood)
+
+        if is_optimum
+            #println("Local optimum found at index ", to_bitstring(i, bits), " with fitness ", landscape[i])
             push!(local_optima, i)
         end
     end
@@ -87,22 +105,30 @@ function get_local_optima(landscape::Vector{Float32}; k::Int=1)
 end
 
 function neighbors(index::Int, n_bits::Int; k::Int=1)
+    # Initialize an empty array to store neighbor indices
     neigh = Int[]
 
+    # Loop over Hamming distances from 1 up to k
     for d in 1:k
+    # Generate all combinations of bit positions of size d
         for positions in combinations(0:n_bits-1, d)
             mask = 0
+            # Build a bitmask with 1s in the selected positions
             for i in positions
                 mask |= (1 << i)
             end
 
+            # Flip the selected bits using XOR to get a neighbor
             neighbor = index ⊻ mask
 
+            # Exclude the zero index (optional constraint)
             if neighbor != 0
                 push!(neigh, neighbor)
             end
         end
     end
+
+    # println("Neighbors of ", to_bitstring(index, n_bits)," (k=$k): ", to_bitstring.(neigh, n_bits))
 
     return neigh
 end

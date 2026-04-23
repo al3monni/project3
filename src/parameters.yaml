@@ -3,7 +3,7 @@
 
 # Neighborhood size
 neighborhood: 
-  size: 1
+  size: 3
 
 # Datasets to use
 datasets:
@@ -16,14 +16,16 @@ datasets:
   08-letter-r_knn_F.h5:
     min: 0.038708337
     max: 0.9563333
+  triangle:
 
 # Landscape parameters
 landscape:
   dataset_name: "accuracies"
   penalty: 0.01
-  n: 16           # for synthetic landscape
-  m: 1.0          # for synthetic landscape
-  s: 4            # for synthetic landscape
+  synthetic:
+    n: 32           # for synthetic landscape
+    m: 1          # for synthetic landscape
+    s: 4            # for synthetic landscape
 
 # Experiment parameters
 experiment:

@@ -15,10 +15,9 @@ include("utils.jl")
 # 1. Flat Fitness Landscape Visualization
 # =========================================================
 
-function plot_landscape(fitness_lookup::Vector{Float32})
+function plot_landscape(fitness_lookup::Vector{Float32}, local_optima::Vector{Int} = Int[]; show_points::Bool = false)
 
-    # extract the individuals
-    x = eachindex(fitness_lookup)
+    x = eachindex(fitness_lookup)   
 
     f = Figure(size = (900, 500))
     
@@ -30,7 +29,14 @@ function plot_landscape(fitness_lookup::Vector{Float32})
     )
 
     lines!(ax, x, fitness_lookup)
-    scatter!(ax, x, fitness_lookup)
+    if show_points
+        scatter!(ax, x, fitness_lookup)
+    end
+    
+    # highlight local optima
+    if !isempty(local_optima)
+        scatter!(ax, local_optima, fitness_lookup[local_optima], color = :red, markersize = 8)
+    end
 
     return f
 end
