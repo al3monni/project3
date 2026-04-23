@@ -3,7 +3,7 @@
 
 # Neighborhood size
 neighborhood: 
-  size: 1
+  size: 3
 
 # Datasets to use
 datasets:

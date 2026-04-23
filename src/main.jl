@@ -15,6 +15,7 @@ const CONFIG = YAML.load_file(joinpath(@__DIR__, "parameters.yaml"))
 const DATASETS = CONFIG["datasets"]
 const DATASET_NAME = CONFIG["landscape"]["dataset_name"]
 const PENALTY = CONFIG["landscape"]["penalty"]
+const SYNTHETIC = CONFIG["landscape"]["synthetic"]
 const NEIGHBORHOOD_SIZE = CONFIG["neighborhood"]["size"]
 
 const N_RUNS = CONFIG["experiment"]["n_runs"]
@@ -42,50 +43,64 @@ function run_visualizations()
 
     println("\nRunning landscape visualizations...")
 
-    for dataset in DATASETS
+    #for dataset in keys(DATASETS)
+        #for k in 1:NEIGHBORHOOD_SIZE
 
-        landscape = load_landscape(dataset)
-        n = length(landscape)
-        n_bits = ceil(Int, log2(n))
-        local_optima = get_local_optima(landscape; k=NEIGHBORHOOD_SIZE)
+        dataset = "triangle"
+        k = 1
 
-        f1 = plot_landscape(landscape)
-        f2 = plot_landscape_polar(landscape)
-        f3 = hinged_bitstring_map(landscape, local_optima)
+            if dataset == "triangle"
+                landscape = triangle_landscape(SYNTHETIC["n"]; m=SYNTHETIC["m"], s=SYNTHETIC["s"])
+                triangle = true
+            else
+                landscape = load_landscape(dataset)
+                triangle = false
+            end
 
-        # ==================== LON ====================
-        
-        # Build LON
-        g, opt_index_map, basin_map = build_LON(landscape, local_optima, n_bits; k=NEIGHBORHOOD_SIZE)
+            n = length(landscape)
+            n_bits = ceil(Int, log2(n))
+            
+            local_optima = get_local_optima(landscape; k=k, triangle=triangle)
 
-        # Compute basin sizes
-        basin_sizes = compute_basin_sizes(basin_map, local_optima)
+            f1 = plot_landscape(landscape, local_optima; show_points = triangle)
+            #f2 = plot_landscape_polar(landscape)
+            f3 = hinged_bitstring_map(landscape, local_optima)
 
-        # Export LON
-        #export_LON(landscape, g, opt_index_map, basin_sizes)
+            # ==================== LON ====================
+            
+            # Build LON
+            g, opt_index_map, basin_map = build_LON(landscape, local_optima, n_bits; k=NEIGHBORHOOD_SIZE)
 
-        # Plot LON
-        f4 = plot_lon(g, landscape, opt_index_map, basin_sizes)
+            # Compute basin sizes
+            basin_sizes = compute_basin_sizes(basin_map, local_optima)
 
-        #display(f1)
-        #display(f2)
-        #display(f3)
-        #display(f4)
+            # Export LON
+            #export_LON(landscape, g, opt_index_map, basin_sizes)
 
-        img = "img$k"
-        out_path = joinpath(@__DIR__, "..", img)
-        mkpath(out_path)
+            # Plot LON
+            f4, _ = plot_lon(g, landscape, opt_index_map, basin_sizes)
 
-        dataset_short = split(dataset, ".")[1]
+            display(f1)
+            #display(f2)
+            #display(f3)
+            #display(f4)
 
-        save("$out_path/$(dataset_short)_landscape.png", f1)
-        save("$out_path/$(dataset_short)_landscape_polar.png", f2)
-        save("$out_path/$(dataset_short)_hinged_bitstring_map.png", f3)
-        save("$out_path/$(dataset_short)_lon.png", f4)
+            base_path = joinpath(@__DIR__, "..", "img")
 
-        println("  Saved visualizations for $dataset")
-    end
-end
+            dataset_short = split(dataset, ".")[1]
+            out_path = joinpath(base_path, dataset_short, "k_$(k)")
+
+            mkpath(out_path)
+
+            #save(joinpath(out_path, "$(dataset_short)_k$(k)_2Dlandscape.png"), f1)
+            #save(joinpath(out_path,"$(dataset_short)_k$(k)_landscape_polar.png", f2)
+            #save(joinpath(out_path, "$(dataset_short)_k$(k)_hinged_bitstring_map.png"), f3)
+            #save(joinpath(out_path, "$(dataset_short)_k$(k)_lon.png"), f4)
+
+            println("  Saved visualizations for $dataset")
+        end
+    #end
+#end
 
 # ============== Run Experiment ==============
 
@@ -211,7 +226,7 @@ function test_behavior()
 
     # =================== Plots ===================
 
-    f1 = plot_landscape_with_path(landscape, best_path) # DEBUG OK - poor visualization due to 2D projection
+    f1 = plot_landscape_with_path(landscape, best_path, local_optima) # DEBUG OK - poor visualization due to 2D projection
 
     f2 = plot_landscape_polar_with_path(landscape, best_path)
 
@@ -251,6 +266,6 @@ function test_behavior()
 
 end
 
-# test_behavior()
-
-main()
+#test_behavior()
+run_visualizations()
+#main()

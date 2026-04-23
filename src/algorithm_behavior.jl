@@ -27,10 +27,10 @@ function overlay_path!(
     end
 end # DEBUG OK
 
-function plot_landscape_with_path(landscape, best_path)
+function plot_landscape_with_path(landscape, best_path, local_optima)
 
     # get the landscape (2D simple representation)
-    f = plot_landscape(landscape)
+    f = plot_landscape(landscape, local_optima)
 
     # overlay the best path on the landscape
      overlay_path!(
