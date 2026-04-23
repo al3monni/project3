@@ -1,12 +1,5 @@
 using Random
 
-struct Landscape
-    name::String
-    mean_accuracies::Vector{Float64}
-    mean_times::Vector{Float64}
-    n_features::Int
-end
-
 mutable struct Individual
     bits::BitVector
     objectives::Tuple{Float64, Float64} # (accuracy, -num_features)
@@ -15,14 +8,15 @@ mutable struct Individual
 end
 
 function NSGA2!(
-    landscape::Vector{Float32},
+    landscape::Landscape,
     popsize::Int,
-    k_max::Int;
+    k_max::Int,
+    f::Function;
     pc::Float64 = 0.9,
     pm::Float64 = -1.0
     )
 
-    L = length(landscape)
+    L = length(landscape.accuracies)
     n_bits = ceil(Int, log2(L))
     pm = pm < 0 ? 1.0 / n_bits : pm
 
@@ -30,7 +24,7 @@ function NSGA2!(
 
     # Initial evaluation
     for ind in population
-        ind.objectives = evaluate_multiobjective(ind.bits, landscape)
+        ind.objectives = f(bitvector_to_index(ind.bits), landscape)
     end
 
     # Initialize metadata
@@ -44,7 +38,7 @@ function NSGA2!(
 
             offspring = create_offspring(population, popsize, pc, pm)
             for ind in offspring
-                ind.objectives = evaluate_multiobjective(ind.bits, landscape)
+                ind.objectives = f(bitvector_to_index(ind.bits), landscape)
             end
 
             # Environmental selection
@@ -81,16 +75,11 @@ end
 # Utility Functions
 # =========================================================
 
-function evaluate_multiobjective(bits::BitVector, landscape::Vector{Float32})
+function evaluate_multiobjective(x::Integer, landscape::Landscape)
 
-    x = bitvector_to_index(bits)
-    n_features = count_ones(x)
+    active_feature = count_ones(x)
 
-    if n_features == 0 || x > length(landscape)
-        return (0.0, 0.0)
-    end
-
-    return (landscape[bitvector_to_index(bits)], -Float64(n_features))
+    return (accuracy(x, landscape), -Float64(active_feature))
 end
 
 function repair_zero_features!(bits::BitVector)

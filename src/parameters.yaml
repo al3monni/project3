@@ -8,27 +8,34 @@ neighborhood:
 # Datasets to use
 datasets:
   01-breast-w_lr_F.h5: 
-    min: 0.78780484
-    max: 0.97012186
+    n_features: 8
   05-credit-a_rf_F.h5:
-    min: 0.5204083
-    max: 0.8912626
+    n_features: 15
   08-letter-r_knn_F.h5:
-    min: 0.038708337
-    max: 0.9563333
+    n_features: 16
+  06-zoo_lr_F.h5:
+    n_features: 16
+  10-hepatitis_lr_F.h5:
+    n_features: 19
+  triangle:
+    n: 16
+    m: 1.0
+    s: 4
+  asymmetric:
+    n: 31
+    m: 1.0
+    s: 5  
+
 
 # Landscape parameters
 landscape:
   dataset_name: "accuracies"
-  penalty: 0.01
-  n: 16           # for synthetic landscape
-  m: 1.0          # for synthetic landscape
-  s: 4            # for synthetic landscape
+  penalty: 0.1
 
 # Experiment parameters
 experiment:
-  n_runs: 30              # Number of independent runs
-  popsize: 50             # Population size
+  n_runs: 1              # Number of independent runs
+  popsize: 20             # Population size
   generations: 100        # Number of generations
   output_dir: "res"       # Base output directory
 
@@ -37,7 +44,6 @@ algorithms:
   GA:
     pc: 0.9               # Crossover probability
     pm: -1.0              # Mutation probability (-1 = auto: 1/n_bits)
-    # tournament_size: 3    # Tournament selection size
 
   PSO:
     w: 0.7                # Inertia weight
@@ -47,3 +53,14 @@ algorithms:
   NSGA2:
     pc: 0.9               # Crossover probability
     pm: -1.0              # Mutation probability (-1 = auto: 1/n_bits)
+
+
+
+# cose da fare
+# - sign up for demo day (DONE)
+# - general check (expecially for GA and PSO)
+# - test on synthetic landscape
+# - test on test datasets
+# - optional visualization (few ideas)
+# - report
+# - slides

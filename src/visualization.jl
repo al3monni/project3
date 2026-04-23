@@ -336,18 +336,28 @@ end
 # EXPERIMENTAL VISUALIZATIONS
 # =========================================================
 
-function plot_evolution(history, dataset, title)
+function plot_evolution(history, landscape, algorithm)
 
-    sigma = (DATASETS[dataset]["max"] - DATASETS[dataset]["min"]) * 0.1  # add 10% margin above max for better visualization
+    if algorithm == "GA" || algorithm == "PSO"
+        min = minimum(landscape.fitnesses)
+        max = maximum(landscape.fitnesses)
+        y_label = "Fitness"
+    else
+        min = minimum(landscape.accuracies)
+        max = maximum(landscape.accuracies)
+        y_label = "Accuracy"
+    end
+
+    sigma = (max - min) * 0.1  # add 10% margin above max for better visualization
 
     generations = 1:size(history, 2)
     f = Figure(size = (900, 500))
     ax = Axis(
         f[1, 1],
-        title = title,
+        title = "$algorithm on $(split(landscape.name, ".")[1])",
         xlabel = "Generation",
-        ylabel = "Fitness",
-        limits = (0, GENERATIONS, DATASETS[dataset]["min"], DATASETS[dataset]["max"] + sigma)
+        ylabel = y_label,
+        limits = (0, GENERATIONS, min, max + sigma)
     )
 
     # Plot mean fitness
@@ -357,7 +367,7 @@ function plot_evolution(history, dataset, title)
     band!(ax, generations, history[1, :], history[2, :], color=:blue, alpha=0.3, label="Min-Max Range")
 
     # Plot optimal fitness as a dashed line
-    hlines!(ax, [DATASETS[dataset]["max"]], color=:red, linestyle=:dash, label="Optimal Fitness")
+    hlines!(ax, [max], color=:red, linestyle=:dash, label="Optimal $y_label")
 
     axislegend(position = :rb)
     return f

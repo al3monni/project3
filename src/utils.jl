@@ -7,38 +7,90 @@ using Statistics
 # DATA LOADING AND FITNESS CALCULATION
 # ===========================================================
 
+mutable struct Landscape
+    name::String
+    accuracies::Vector{Float32}
+    fitnesses::Vector{Float32}
+    n_features::Int
+end
+
 # ============= Landscape and Fitness Functions =============
 
 function load_landscape(filename::String)
 
-    # obtain a reference for the hdf5 file
-    h5open("train/"*filename, "r") do f
+    if filename == "triangle" || filename == "asymmetric"
+        return triangle_landscape(filename)
+    end
+
+    n_features = CONFIG["datasets"][filename]["n_features"]
+    landscape = Landscape(filename, Float32[], Float32[], n_features)
+
+    # obtain a reference for the hdf5 file 
+    filepath = joinpath("train", filename)
+    if !isfile(filepath)
+        filepath = joinpath("test", filename)
+        if !isfile(filepath)
+            error("File $filename not found in train/ or test/ directories.")
+        end
+    end
+
+    h5open(filepath, "r") do f
 
         # select the "accuracies" dataset
         data = read(f[DATASET_NAME])
 
-        # compute the mean of each row
-        return vec(mean(data, dims=2))
+
+        # compute the mean of each row (raw accuracies)
+        accuracies = vec(mean(data, dims=2))
+        landscape.accuracies = accuracies
+
+        # compute the fitnesses with penalty
+        init_fitnesses!(landscape)
     end
+
+    return landscape
 end
 
-function get_fitness(x::Integer, lookup::Vector{Float32})
+function init_fitnesses!(landscape::Landscape)
+
+    n = length(landscape.accuracies)
+    fitnesses = Vector{Float32}(undef, n)
+
+    @inbounds for x in 1:n
+        penalty = PENALTY * count_ones(x) / landscape.n_features
+        fitnesses[x] = landscape.accuracies[x] - penalty
+    end
+
+    landscape.fitnesses = fitnesses
+end
+
+function fitness(x::Integer, landscape::Landscape)
+
+    n = length(landscape.accuracies)
 
     # handle out-of-bounds cases
-    if x == 0 || x > length(lookup)
+    if x == 0 || x > n
         return 0
     end
-    
-    # compute the penalty based on feature number
-    penalty = PENALTY * count_ones(x)
-    
-    # return the penalized fitness
-    return lookup[x] - penalty
+
+    return landscape.fitnesses[x]
+end
+
+function accuracy(x::Integer, landscape::Landscape)
+
+    n = length(landscape.accuracies)
+
+    # handle out-of-bounds cases
+    if x == 0 || x > n
+        return 0
+    end
+
+    return landscape.accuracies[x]
 end
 
 # ==================== Triangle Function ====================
 
-function triangle_function(b::Integer; m::Float32=1.0f0, s::Int=4)
+function triangle_function(b::Integer, m::Float64, s::Integer)
 
     r = abs(b)
     t = mod(r, 2s)
@@ -50,17 +102,41 @@ function triangle_function(b::Integer; m::Float32=1.0f0, s::Int=4)
     end
 end
 
-function triangle_landscape(n::Integer; m::Float32=1.0f0, s::Int=4)
+function asymmetric_triangle_function(b::Integer, m::Float64, s::Integer)
+    
+    if b < 31
+        return triangle_function(b, m, s)
+    else
+        return triangle_function(b, 6.0, s)
+    end
+    
+end
+
+function triangle_landscape(filename::String)
+
+    if filename == "triangle"
+        triangle_function_to_use = triangle_function
+    elseif filename == "asymmetric"
+        triangle_function_to_use = asymmetric_triangle_function
+    else
+        error("Invalid filename for triangle landscape: $filename")
+    end
+
+    n = CONFIG["datasets"][filename]["n"]
+    m = CONFIG["datasets"][filename]["m"]
+    s = CONFIG["datasets"][filename]["s"]
 
     # preallocate the lookup table
     lookup = Vector{Float32}(undef, n)
 
     # precompute and store triangle fitness values
     @inbounds for x in 1:n                              # pay attention here
-        lookup[x] = triangle_function(x; m=m, s=s)
+        lookup[x] = triangle_function_to_use(x, m, s)
     end
 
-    return lookup
+    println(lookup)
+
+    return Landscape(filename, lookup, lookup, ceil(Int, log2(n)))
 end
 
 # =========================================================
@@ -162,13 +238,13 @@ function polar_coordinates(coordinates; base_radius = 0.1, radial_scale = 0.4)
     return x, y
 end
 
-function save_results(algorithm::String, dataset::String, file::String, data)
+function save_results(algorithm::String, landscape::Landscape, file::String, data)
     history, avg_best, std_best, min_best, max_best, pareto_front = data
 
-    dataset_name = split(dataset, ".")[1]
+    dataset_name = split(landscape.name, ".")[1]
 
     # History graph
-    evolution_plot = plot_evolution(history, dataset, "$algorithm on $dataset_name")
+    evolution_plot = plot_evolution(history, landscape, algorithm)
     save(joinpath(OUTPUT_DIR, "$(dataset_name)_$(algorithm)_evolution.png"), evolution_plot)
 
     # Entropy graph

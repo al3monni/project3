@@ -89,7 +89,7 @@ end
 
 # ============== Run Experiment ==============
 
-function run(landscape, algorithm, pop_size, k_max, params, n_runs) # -> average history across runs + statistics
+function run(landscape, algorithm, pop_size, k_max, f, params, n_runs) # -> average history across runs + statistics
     
     histories = Vector{Any}(undef, n_runs) # -> [history1, history2, ...] where history_i is [5, generations]
     results = Vector{Any}(undef, n_runs)
@@ -97,7 +97,7 @@ function run(landscape, algorithm, pop_size, k_max, params, n_runs) # -> average
 
      for i in 1:n_runs
         println("  Run $i / $n_runs")
-        histories[i], results[i], pareto_fronts[i] = algorithm(landscape, pop_size, k_max; params...) # -> [5, generations], EvoLP.Result, pareto_front
+        histories[i], results[i], pareto_fronts[i] = algorithm(landscape, pop_size, k_max, f; params...) # -> [5, generations], EvoLP.Result, pareto_front
     end
     
     # Compute averaged history across runs
@@ -117,7 +117,7 @@ function run(landscape, algorithm, pop_size, k_max, params, n_runs) # -> average
     # Compute statistics across runs
     bests = [r.fxstar for r in results]
     avg_best = mean(bests)
-    std_best = std(bests)
+    std_best = isnan(std(bests)) ? 0.0 : std(bests)
     min_best = minimum(bests)
     max_best = maximum(bests)
 
@@ -133,23 +133,20 @@ function run(landscape, algorithm, pop_size, k_max, params, n_runs) # -> average
     return avg_history, avg_best, std_best, min_best, max_best, pareto_front
 end
 
-function main()
-
-    # run_visualizations()
+function run_experiments(datasets=keys(DATASETS))
 
     mkpath(OUTPUT_DIR)
     cp(joinpath(@__DIR__, "parameters.yaml"), joinpath(OUTPUT_DIR, "parameters.yaml"))
 
     println("Output will be saved to: $OUTPUT_DIR")
 
-    for dataset in keys(DATASETS)
+    for dataset in datasets
         println("\n" * "="^60)
         println("EXPERIMENT: $dataset")
         println("="^60)
 
         landscape = load_landscape(dataset)
-        println("Loaded landscape with $(length(landscape)) points")
-        println("Max: $(maximum(landscape)), Min: $(minimum(landscape))")
+        println("Loaded landscape with $(length(landscape.accuracies)) points")
 
         # Initialize results file for this dataset
         output_path = joinpath(OUTPUT_DIR, "$(split(dataset, ".")[1])_best_fitness.csv")
@@ -159,22 +156,34 @@ function main()
 
         # Run GA
         println("\nRunning GA...")
-        results = run(landscape, GA!, POPSIZE, GENERATIONS, GA_PARAMS, N_RUNS)
-        save_results("GA", dataset, output_path, results)
+        results = run(landscape, GA!, POPSIZE, GENERATIONS, get_fitness, GA_PARAMS, N_RUNS)
+        save_results("GA", landscape, output_path, results)
 
         # Run PSO
         println("\nRunning PSO...")
-        results = run(landscape, PSO!, POPSIZE, GENERATIONS, PSO_PARAMS, N_RUNS)
-        save_results("PSO", dataset, output_path, results)
+        results = run(landscape, PSO!, POPSIZE, GENERATIONS, get_fitness, PSO_PARAMS, N_RUNS)
+        save_results("PSO", landscape, output_path, results)
 
         # Run NSGA2
         println("\nRunning NSGA2...")
-        results = run(landscape, NSGA2!, POPSIZE, GENERATIONS, NSGA2_PARAMS, N_RUNS)
-        save_results("NSGA2", dataset, output_path, results)
+        results = run(landscape, NSGA2!, POPSIZE, GENERATIONS, evaluate_multiobjective, NSGA2_PARAMS, N_RUNS)
+        save_results("NSGA2", landscape, output_path, results)
 
     end
 
     println("Output saved to: $OUTPUT_DIR")
+end
+
+function main()
+
+    # 1. Visualization of landscapes
+    # run_visualizations()
+
+    # 2. Run experiments
+    run_experiments(["asymmetric"])
+
+    # 3. Test behavior of algorithms on landscapes
+    # test_behavior()
 
 end
 

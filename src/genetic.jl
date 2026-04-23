@@ -31,12 +31,13 @@ function bitstring_to_index(x::BitVector)
 end
 
 function PSO!(
-    landscape::Vector{Float32},
+    landscape::Landscape,
     popsize::Int64,
-    k_max::Int64;
+    k_max::Int64,
+    f::Function;
     w=1.0, c1=1.0, c2=1.0, vmax=6.0, maximize=true
 )
-    L = length(landscape)
+    L = length(landscape.accuracies)
     n_bits = ceil(Int, log2(L))
 
     better = maximize ? (>) : (<)
@@ -59,7 +60,7 @@ function PSO!(
         # initial evaluation
         for P in population
             idx = bitstring_to_index(P.x)
-            P.y = idx <= L ? get_fitness(idx, landscape) : invalid_fitness
+            P.y = idx <= L ? f(idx, landscape) : invalid_fitness
 
             P.x_best = copy(P.x)
             P.y_best = P.y
@@ -87,7 +88,7 @@ function PSO!(
                 end
 
                 idx = bitstring_to_index(P.x)
-                P.y = idx <= L ? get_fitness(idx, landscape) : invalid_fitness
+                P.y = idx <= L ? f(idx, landscape) : invalid_fitness
 
                 if better(P.y, y_best)
                     x_best = copy(P.x)
@@ -116,9 +117,10 @@ end
 # ==================== Genetic Algorithm ====================
 
 function GA!(
-    landscape::Vector{Float32},
+    landscape::Landscape,
     popsize::Int64,
-    k_max::Int64;
+    k_max::Int64,
+    f::Function;
     S::EvoLP.Selector=EvoLP.TournamentSelector(3),
     C::EvoLP.Recombinator=EvoLP.UniformCrossover(),
     M::EvoLP.Mutator=EvoLP.BitwiseMutator(0.05),
@@ -126,7 +128,7 @@ function GA!(
     pm=-1.0
     )
 
-    L = length(landscape)
+    L = length(landscape.accuracies)
     n_bits = ceil(Int, log2(L))
 
     # For maximization, invalid indices should be as bad as possible
@@ -140,7 +142,7 @@ function GA!(
 
     evaluate(x) = begin
         idx = bitstring_to_index(x)
-        idx <= L ? get_fitness(idx, landscape) : invalid_fitness
+        idx <= L ? f(idx, landscape) : invalid_fitness
     end
 
     # Initial evaluation
