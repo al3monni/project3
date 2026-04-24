@@ -13,15 +13,15 @@ using Dates
 const CONFIG = YAML.load_file(joinpath(@__DIR__, "parameters.yaml"))
 
 const DATASETS = CONFIG["datasets"]
-const DATASET_NAME = CONFIG["landscape"]["dataset_name"]
-const PENALTY = CONFIG["landscape"]["penalty"]
-const SYNTHETIC = CONFIG["landscape"]["synthetic"]
-const NEIGHBORHOOD_SIZE = CONFIG["neighborhood"]["size"]
+const TRAIN = [dataset for dataset in keys(DATASETS) if DATASETS[dataset]["split"] == "train"]
+const TEST = [dataset for dataset in keys(DATASETS) if DATASETS[dataset]["split"] == "test"]
+const SYNTHETIC = [dataset for dataset in keys(DATASETS) if DATASETS[dataset]["split"] == "synthetic"]
+const NEIGHBORHOOD_SIZE = CONFIG["visualization"]["neighborhood_size"]
 
 const N_RUNS = CONFIG["experiment"]["n_runs"]
 const POPSIZE = CONFIG["experiment"]["popsize"]
 const GENERATIONS = CONFIG["experiment"]["generations"]
-const OUTPUT_DIR = next_run_dir(CONFIG["experiment"]["output_dir"])
+const RUN_OUTPUT_DIR = next_run_dir(CONFIG["experiment"]["output_dir"])
 
 const GA_PARAMS = Dict(
     :pc => CONFIG["algorithms"]["GA"]["pc"],
@@ -39,28 +39,29 @@ const NSGA2_PARAMS = Dict(
     
 # ============== Visualizations ==============
 
-function run_visualizations()
+function run_visualizations(datasets=keys(DATASETS))
 
     println("\nRunning landscape visualizations...")
 
-    #for dataset in keys(DATASETS)
-        #for k in 1:NEIGHBORHOOD_SIZE
+    for dataset in datasets
+        for k in 1:NEIGHBORHOOD_SIZE
 
-        dataset = "triangle"
-        k = 1
-
-            if dataset == "triangle"
-                landscape = triangle_landscape(SYNTHETIC["n"]; m=SYNTHETIC["m"], s=SYNTHETIC["s"])
-                triangle = true
-            else
-                landscape = load_landscape(dataset)
-                triangle = false
-            end
-
-            n = length(landscape)
-            n_bits = ceil(Int, log2(n))
+            # k = 1
+            # dataset = "triangle"
             
-            local_optima = get_local_optima(landscape; k=k, triangle=triangle)
+            # if dataset == "triangle"
+            #     landscape = triangle_landscape(SYNTHETIC["n"]; m=SYNTHETIC["m"], s=SYNTHETIC["s"])
+            #     triangle = true
+            # else
+            #     landscape = load_landscape(dataset)
+            #     triangle = false
+            # end
+            
+            landscape = load_landscape(dataset)
+
+            n_bits = landscape.n_features
+            
+            local_optima = get_local_optima(landscape; k=k)
 
             f1 = plot_landscape(landscape, local_optima; show_points = triangle)
             #f2 = plot_landscape_polar(landscape)
@@ -99,8 +100,8 @@ function run_visualizations()
 
             println("  Saved visualizations for $dataset")
         end
-    #end
-#end
+    end
+end
 
 # ============== Run Experiment ==============
 
@@ -150,10 +151,10 @@ end
 
 function run_experiments(datasets=keys(DATASETS))
 
-    mkpath(OUTPUT_DIR)
-    cp(joinpath(@__DIR__, "parameters.yaml"), joinpath(OUTPUT_DIR, "parameters.yaml"))
+    mkpath(RUN_OUTPUT_DIR)
+    cp(joinpath(@__DIR__, "parameters.yaml"), joinpath(RUN_OUTPUT_DIR, "parameters.yaml"))
 
-    println("Output will be saved to: $OUTPUT_DIR")
+    println("Output will be saved to: $RUN_OUTPUT_DIR")
 
     for dataset in datasets
         println("\n" * "="^60)
@@ -164,19 +165,19 @@ function run_experiments(datasets=keys(DATASETS))
         println("Loaded landscape with $(length(landscape.accuracies)) points")
 
         # Initialize results file for this dataset
-        output_path = joinpath(OUTPUT_DIR, "$(split(dataset, ".")[1])_best_fitness.csv")
+        output_path = joinpath(RUN_OUTPUT_DIR, "$(split(dataset, ".")[1])_best_fitness.csv")
         open(output_path, "w") do io
             println(io, "algorithm,mean_best,std_best,min_best,max_best")
         end
 
         # Run GA
         println("\nRunning GA...")
-        results = run(landscape, GA!, POPSIZE, GENERATIONS, get_fitness, GA_PARAMS, N_RUNS)
+        results = run(landscape, GA!, POPSIZE, GENERATIONS, fitness, GA_PARAMS, N_RUNS)
         save_results("GA", landscape, output_path, results)
 
         # Run PSO
         println("\nRunning PSO...")
-        results = run(landscape, PSO!, POPSIZE, GENERATIONS, get_fitness, PSO_PARAMS, N_RUNS)
+        results = run(landscape, PSO!, POPSIZE, GENERATIONS, fitness, PSO_PARAMS, N_RUNS)
         save_results("PSO", landscape, output_path, results)
 
         # Run NSGA2
@@ -186,19 +187,34 @@ function run_experiments(datasets=keys(DATASETS))
 
     end
 
-    println("Output saved to: $OUTPUT_DIR")
+    println("Output saved to: $RUN_OUTPUT_DIR")
 end
 
 function main()
 
     # 1. Visualization of landscapes
-    # run_visualizations()
+    run_visualizations(TRAIN)
 
-    # 2. Run experiments
-    run_experiments(["asymmetric"])
+    # 2. Run experiments (data on algorithms' average performance across runs)
+    # run_experiments(TRAIN + triangle)
+    
+    # 2a. Visualizeion of algorithm behavior on landscapes (single run, ...)
+    # run_behavior_visualizations(TRAIN)
 
-    # 3. Test behavior of algorithms on landscapes
-    # test_behavior()
+    # 2b. Visualization of algorithm behavior on synthetic landscapes (single run, population distribution, ...)
+    # run_behavior_visualizations(triangle)
+
+    # 4. Visualization of test landscapes
+    # run_visualizations(TEST + asymmetric)
+
+    # 5. Run algorithms on test landscapes
+    # run_experiments(TEST + asymmetric)
+
+    # 5a. Visualizeion of algorithm behavior on test landscapes (single run, ...)
+    # run_behavior_visualizations(TEST )
+
+    # 5b. Visualization of algorithm behavior on synthetic landscapes (single run, population distribution, ...)
+    # run_behavior_visualizations(asymmetric)
 
 end
 
@@ -266,6 +282,4 @@ function test_behavior()
 
 end
 
-#test_behavior()
-run_visualizations()
-#main()
+main()

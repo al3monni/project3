@@ -1,41 +1,46 @@
 # Project 3 - Bio-inspired AI
 # Centralized configuration file
 
-# Neighborhood size
-neighborhood: 
-  size: 3
-
 # Datasets to use
 datasets:
   01-breast-w_lr_F.h5: 
     n_features: 8
+    split: "train"
   05-credit-a_rf_F.h5:
     n_features: 15
+    split: "train"
   08-letter-r_knn_F.h5:
     n_features: 16
+    split: "train"
   06-zoo_lr_F.h5:
     n_features: 16
+    split: "test"
   10-hepatitis_lr_F.h5:
     n_features: 19
+    split: "test"
   triangle:
     n: 16
-    m: 1.0
+    m: 1
     s: 4
+    split: "train"
   asymmetric:
     n: 31
-    m: 1.0
-    s: 5  
+    m: 1
+    s: 5
+    split: "test"
 
-
-# Landscape parameters
 landscape:
-  dataset_name: "accuracies"
-  penalty: 0.1
+  train_penalty: 0.1
+  test_penalty: 0.0
+
+visualization:
+  neighborhood_size: 3
+  output_dir: "img"
 
 # Experiment parameters
 experiment:
   n_runs: 1              # Number of independent runs
-  popsize: 20             # Population size
+  popsize: 50             # Population size
   generations: 100        # Number of generations
   output_dir: "res"       # Base output directory
 

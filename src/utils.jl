@@ -2,17 +2,26 @@ using Combinatorics
 using Printf
 using HDF5
 using Statistics
+using Base.Threads
 
 # ===========================================================
 # DATA LOADING AND FITNESS CALCULATION
 # ===========================================================
 
-mutable struct Landscape
-    name::String
-    accuracies::Vector{Float32}
-    fitnesses::Vector{Float32}
-    n_features::Int
+struct Landscape
+    name        # string
+    accuracies  # vector of numbers
+    fitnesses   # vector of numbers
+    n_features  # int
 end
+
+# The 32-value lookup (indexed by number of active bits: 0 to 31)
+const TRIANGLE_ASYMMETRIC_TABLE = UInt8[
+    0, 1, 2, 3, 4, 5, 4, 3, 2, 1,   # 0-9  active bits
+    0, 1, 2, 3, 4, 5, 4, 3, 2, 1,   # 10-19
+    0, 1, 2, 3, 4, 5, 4, 3, 2, 1,   # 20-29
+    0, 6                             # 30-31 (exception: m=6 kicks in at 31)
+]
 
 # ============= Landscape and Fitness Functions =============
 
@@ -20,6 +29,7 @@ function load_landscape(filename::String)
 
     if filename == "triangle" || filename == "asymmetric"
         return triangle_landscape(filename)
+        penalty = penalty * count_ones(x) / n_features
     end
 
     n_features = CONFIG["datasets"][filename]["n_features"]
@@ -37,31 +47,29 @@ function load_landscape(filename::String)
     h5open(filepath, "r") do f
 
         # select the "accuracies" dataset
-        data = read(f[DATASET_NAME])
-
-
+        data = read(f["accuracies"])
+        
         # compute the mean of each row (raw accuracies)
         accuracies = vec(mean(data, dims=2))
-        landscape.accuracies = accuracies
 
         # compute the fitnesses with penalty
-        init_fitnesses!(landscape)
-    end
+        penalty = (filename == "triangle" || filename == "asymmetric") ? CONFIG["landscape"]["$(CONFIG["datasets"][filename]["split"])_penalty"] / n_features : 0.0
+        fitnesses = init_fitnesses(accuracies, n_features, penalty)
 
-    return landscape
+        return Landscape(filename, accuracies, fitnesses, n_features)
+    end
 end
 
-function init_fitnesses!(landscape::Landscape)
+function init_fitnesses(accuracies::Vector{Float32}, n_features::Int, penalty::Float64)
 
-    n = length(landscape.accuracies)
+    n = length(accuracies)
     fitnesses = Vector{Float32}(undef, n)
 
     @inbounds for x in 1:n
-        penalty = PENALTY * count_ones(x) / landscape.n_features
-        fitnesses[x] = landscape.accuracies[x] - penalty
+        fitnesses[x] = accuracies[x] - (penalty * count_ones(x))
     end
 
-    landscape.fitnesses = fitnesses
+    return fitnesses
 end
 
 function fitness(x::Integer, landscape::Landscape)
@@ -90,34 +98,42 @@ end
 
 # ==================== Triangle Function ====================
 
-function triangle_function(b::Integer, m::Float64, s::Integer)
+function triangle(b::Integer, m::Integer, s::Integer)::Integer
+    norm_b = count_ones(b)
 
-    r = abs(b)
-    t = mod(r, 2s)
+    a = ceil(Integer, norm_b/s)
 
-    if t <= s
-        return m * t
+    if a % 2 == 1
+        # g(b)
+        if norm_b % s == 0
+            return m * s
+        else 
+            return m * (norm_b % s)
+        end
     else
-        return m * (2s - t)
+        return m * (a * s - norm_b)
     end
 end
 
-function asymmetric_triangle_function(b::Integer, m::Float64, s::Integer)
-    
-    if b < 31
-        return triangle_function(b, m, s)
-    else
-        return triangle_function(b, 6.0, s)
-    end
+function asymmetric_triangle(b::Integer, m::Integer, s::Integer)
+
+    #     if b < 31
+    #         return triangle(b, m, s)
+    #     else
+    #         return triangle(b, 6, s)
+    #     end
+
+    active_bits = count_ones(b)
+    return TRIANGLE_ASYMMETRIC_TABLE[active_bits + 1]
     
 end
 
 function triangle_landscape(filename::String)
 
     if filename == "triangle"
-        triangle_function_to_use = triangle_function
+        triangle_function = triangle
     elseif filename == "asymmetric"
-        triangle_function_to_use = asymmetric_triangle_function
+        triangle_function = asymmetric_triangle
     else
         error("Invalid filename for triangle landscape: $filename")
     end
@@ -127,28 +143,30 @@ function triangle_landscape(filename::String)
     s = CONFIG["datasets"][filename]["s"]
 
     # preallocate the lookup table
-    lookup = Vector{Int}(undef, n)
+    lookup = Vector{UInt8}(undef, 2^n)
 
     # precompute and store triangle fitness values
-    @inbounds for x in 1:n                              # pay attention here
-        lookup[x] = triangle_function_to_use(x, m, s)
+    @threads for x in 1:2^n                              # pay attention here
+        lookup[x] = triangle_function(x, m, s)
+
+        # if x % 100_000_000 == 0
+        #     println("Computed triangle fitness for $x / $(2^n) points")
+        # end
     end
 
-    println(lookup)
-
-    return Landscape(filename, lookup, lookup, ceil(Int, log2(n)))
+    return Landscape(filename, lookup, lookup, n)
 end
 
 # =========================================================
 # LOCAL OPTIMA AND NEIGHBORHOOD CALCULATIONS
 # =========================================================
 
-function get_local_optima(landscape::Vector{Float32}; k::Int=1, triangle::Bool=false)
+function get_local_optima(landscape::Landscape; k::Int=1, triangle::Bool=false)
 
     """ compute the set of local optima for a given landscape """
     
-    n = length(landscape)
-    bits = ceil(Int, log2(n))
+    n = length(landscape.accuracies)
+    bits = landscape.n_features
     
     local_optima = Int[]
 
@@ -159,10 +177,10 @@ function get_local_optima(landscape::Vector{Float32}; k::Int=1, triangle::Bool=f
             idx = i
         end
         neighborhood = neighbors(idx, bits; k=k)
-        is_optimum = all(landscape[i] >= landscape[j] for j in neighborhood)
+        is_optimum = all(landscape.accuracies[i] >= landscape.accuracies[j] for j in neighborhood)
 
         if is_optimum
-            #println("Local optimum found at index ", to_bitstring(i, bits), " with fitness ", landscape[i])
+            #println("Local optimum found at index ", to_bitstring(i, bits), " with fitness ", landscape.accuracies[idx])
             push!(local_optima, i)
         end
     end
