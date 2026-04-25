@@ -115,6 +115,17 @@ function triangle(b::Integer, m::Integer, s::Integer)::Integer
     end
 end
 
+# phenotype-level version: takes norm_b (= count of active bits) directly
+# used for visualization — avoids the count_ones(k) trap in plot_triangle_phenotype
+function triangle_phenotype(norm_b::Integer, m::Integer, s::Integer)::Integer
+    a = ceil(Integer, norm_b / s)
+    if a % 2 == 1
+        return norm_b % s == 0 ? m * s : m * (norm_b % s)
+    else
+        return m * (a * s - norm_b)
+    end
+end
+
 function asymmetric_triangle(b::Integer, m::Integer, s::Integer)
 
     #     if b < 31
@@ -142,18 +153,13 @@ function triangle_landscape(filename::String)
     m = CONFIG["datasets"][filename]["m"]
     s = CONFIG["datasets"][filename]["s"]
 
-    # preallocate the lookup table
-    lookup = Vector{UInt8}(undef, 2^n)
-
-    # precompute and store triangle fitness values
-    @threads for x in 1:2^n                              # pay attention here
-        lookup[x] = triangle_function(x, m, s)
-
-        # if x % 100_000_000 == 0
-        #     println("Computed triangle fitness for $x / $(2^n) points")
-        # end
+    # Indices 1..2^n-1: same convention as real datasets (index 0 = no features, excluded).
+    # Any n-bit XOR of a value in [1, 2^n-1] stays in [0, 2^n-1]; 0 is filtered in neighbors().
+    size = 2^n - 1
+    lookup = Vector{Float32}(undef, size)
+    @threads for x in 1:size
+        lookup[x] = Float32(triangle_function(x, m, s))
     end
-
     return Landscape(filename, lookup, lookup, n)
 end
 
@@ -161,30 +167,16 @@ end
 # LOCAL OPTIMA AND NEIGHBORHOOD CALCULATIONS
 # =========================================================
 
-function get_local_optima(landscape::Landscape; k::Int=1, triangle::Bool=false)
-
-    """ compute the set of local optima for a given landscape """
-    
+function get_local_optima(landscape::Landscape; k::Int=1)
     n = length(landscape.accuracies)
     bits = landscape.n_features
-    
     local_optima = Int[]
-
     for i in 1:n
-        if triangle
-            idx = i - 1
-        else
-            idx = i
-        end
-        neighborhood = neighbors(idx, bits; k=k)
-        is_optimum = all(landscape.accuracies[i] >= landscape.accuracies[j] for j in neighborhood)
-
-        if is_optimum
-            #println("Local optimum found at index ", to_bitstring(i, bits), " with fitness ", landscape.accuracies[idx])
+        neighborhood = neighbors(i, bits; k=k)
+        if all(landscape.accuracies[i] >= landscape.accuracies[j] for j in neighborhood)
             push!(local_optima, i)
         end
     end
-    
     return local_optima
 end
 
@@ -276,26 +268,22 @@ function save_results(algorithm::String, landscape::Landscape, file::String, dat
     history, avg_best, std_best, min_best, max_best, pareto_front = data
 
     dataset_name = split(landscape.name, ".")[1]
+    out_dir = dirname(file)  # same directory as the CSV results file
 
-    # History graph
     evolution_plot = plot_evolution(history, landscape, algorithm)
-    save(joinpath(OUTPUT_DIR, "$(dataset_name)_$(algorithm)_evolution.png"), evolution_plot)
+    save(joinpath(out_dir, "$(dataset_name)_$(algorithm)_evolution.png"), evolution_plot)
 
-    # Entropy graph
     entropy_plot = plot_entropy(history, "$algorithm on $dataset_name")
-    save(joinpath(OUTPUT_DIR, "$(dataset_name)_$(algorithm)_entropy.png"), entropy_plot)
+    save(joinpath(out_dir, "$(dataset_name)_$(algorithm)_entropy.png"), entropy_plot)
 
-    # Pareto front graph (for NSGA2)
     if pareto_front !== nothing
         pareto_plot = plot_pareto_front(pareto_front, "Pareto Front on $dataset_name")
-        save(joinpath(OUTPUT_DIR, "$(dataset_name)_$(algorithm)_pareto.png"), pareto_plot)
+        save(joinpath(out_dir, "$(dataset_name)_$(algorithm)_pareto.png"), pareto_plot)
     end
 
-    # Append summary other stats to output file
     open(file, "a") do io
         println(io, "$algorithm,$avg_best,$std_best,$min_best,$max_best")
     end
-
 end
 
 function entropy(population::Vector{BitVector})

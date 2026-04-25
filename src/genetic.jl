@@ -1,6 +1,5 @@
 using EvoLP
 using Statistics
-include("utils.jl")
 
 
 function compute!(history, fitnesses, population, generation)

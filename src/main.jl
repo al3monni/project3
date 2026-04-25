@@ -44,61 +44,41 @@ function run_visualizations(datasets=keys(DATASETS))
     println("\nRunning landscape visualizations...")
 
     for dataset in datasets
-        for k in 1:NEIGHBORHOOD_SIZE
+        dataset_short = split(dataset, ".")[1]
+        landscape = load_landscape(dataset)
 
-            # k = 1
-            # dataset = "triangle"
-            
-            # if dataset == "triangle"
-            #     landscape = triangle_landscape(SYNTHETIC["n"]; m=SYNTHETIC["m"], s=SYNTHETIC["s"])
-            #     triangle = true
-            # else
-            #     landscape = load_landscape(dataset)
-            #     triangle = false
-            # end
-            
-            landscape = load_landscape(dataset)
-
-            n_bits = landscape.n_features
-            
-            local_optima = get_local_optima(landscape; k=k)
-
-            f1 = plot_landscape(landscape, local_optima; show_points = triangle)
-            #f2 = plot_landscape_polar(landscape)
-            f3 = hinged_bitstring_map(landscape, local_optima)
-
-            # ==================== LON ====================
-            
-            # Build LON
-            g, opt_index_map, basin_map = build_LON(landscape, local_optima, n_bits; k=NEIGHBORHOOD_SIZE)
-
-            # Compute basin sizes
-            basin_sizes = compute_basin_sizes(basin_map, local_optima)
-
-            # Export LON
-            #export_LON(landscape, g, opt_index_map, basin_sizes)
-
-            # Plot LON
-            f4, _ = plot_lon(g, landscape, opt_index_map, basin_sizes)
-
-            display(f1)
-            #display(f2)
-            #display(f3)
-            #display(f4)
-
-            base_path = joinpath(@__DIR__, "..", "img")
-
-            dataset_short = split(dataset, ".")[1]
-            out_path = joinpath(base_path, dataset_short, "k_$(k)")
-
+        # --- Synthetic landscapes: phenotypic view ---
+        if dataset == "triangle" || dataset == "asymmetric"
+            out_path = joinpath(@__DIR__, "..", "img", dataset_short)
             mkpath(out_path)
 
-            #save(joinpath(out_path, "$(dataset_short)_k$(k)_2Dlandscape.png"), f1)
-            #save(joinpath(out_path,"$(dataset_short)_k$(k)_landscape_polar.png", f2)
-            #save(joinpath(out_path, "$(dataset_short)_k$(k)_hinged_bitstring_map.png"), f3)
-            #save(joinpath(out_path, "$(dataset_short)_k$(k)_lon.png"), f4)
+            f = plot_triangle_phenotype(dataset)
+            save(joinpath(out_path, "$(dataset_short)_phenotype.png"), f)
+            println("  Saved phenotype plot for $dataset")
+            continue
+        end
 
-            println("  Saved visualizations for $dataset")
+        # --- Real feature-selection landscapes: full structural analysis ---
+        n_bits = landscape.n_features
+
+        for k in 1:NEIGHBORHOOD_SIZE
+            local_optima = get_local_optima(landscape; k=k)
+
+            f1 = plot_landscape(landscape.fitnesses, local_optima)
+            f3 = hinged_bitstring_map(landscape.fitnesses, local_optima)
+
+            g, opt_index_map, basin_map = build_LON(landscape.fitnesses, local_optima, n_bits; k=k)
+            basin_sizes = compute_basin_sizes(basin_map, local_optima)
+            f4, _ = plot_lon(g, landscape.fitnesses, opt_index_map, basin_sizes)
+
+            out_path = joinpath(@__DIR__, "..", "img", dataset_short, "k_$(k)")
+            mkpath(out_path)
+
+            save(joinpath(out_path, "$(dataset_short)_k$(k)_2Dlandscape.png"), f1)
+            save(joinpath(out_path, "$(dataset_short)_k$(k)_hinged_bitstring_map.png"), f3)
+            save(joinpath(out_path, "$(dataset_short)_k$(k)_lon.png"), f4)
+
+            println("  Saved visualizations for $dataset (k=$k)")
         end
     end
 end
@@ -192,93 +172,95 @@ end
 
 function main()
 
-    # 1. Visualization of landscapes
+    # --- Training phase ---
     run_visualizations(TRAIN)
+    run_experiments(TRAIN)
 
-    # 2. Run experiments (data on algorithms' average performance across runs)
-    # run_experiments(TRAIN + triangle)
-    
-    # 2a. Visualizeion of algorithm behavior on landscapes (single run, ...)
-    # run_behavior_visualizations(TRAIN)
+    # Optional: algorithm behaviour figures + GIFs
+    run_behavior_visualizations(TRAIN)
 
-    # 2b. Visualization of algorithm behavior on synthetic landscapes (single run, population distribution, ...)
-    # run_behavior_visualizations(triangle)
+    # --- Test phase (uncomment when ready) ---
+    # run_visualizations(TEST)
+    # run_experiments(TEST)
 
-    # 4. Visualization of test landscapes
-    # run_visualizations(TEST + asymmetric)
+end
 
-    # 5. Run algorithms on test landscapes
-    # run_experiments(TEST + asymmetric)
+# ============== Algorithm Behaviour Visualizations ==============
 
-    # 5a. Visualizeion of algorithm behavior on test landscapes (single run, ...)
-    # run_behavior_visualizations(TEST )
+# Runs one instance of each algorithm on a dataset and saves:
+#   - A static multi-panel behaviour figure (PNG, good for report)
+#   - A GIF animation of the best-individual trajectory (good for presentation)
+#     Set make_gif=false to skip (requires FFMPEG).
 
-    # 5b. Visualization of algorithm behavior on synthetic landscapes (single run, population distribution, ...)
-    # run_behavior_visualizations(asymmetric)
+function run_behavior_visualizations(
+    datasets = TRAIN;
+    algorithms = [("GA", GA!, fitness, GA_PARAMS),
+                  ("PSO", PSO!, fitness, PSO_PARAMS),
+                  ("NSGA2", NSGA2!, evaluate_multiobjective, NSGA2_PARAMS)],
+    make_gif::Bool = true
+    )
 
+    println("\nRunning behaviour visualizations...")
+
+    for dataset in datasets
+        landscape  = load_landscape(dataset)
+        n_bits     = landscape.n_features
+        local_optima = get_local_optima(landscape; k=1)  # k=1 for speed
+
+        dataset_short = split(dataset, ".")[1]
+        out_path      = joinpath(@__DIR__, "..", "img", dataset_short, "behavior")
+        mkpath(out_path)
+
+        for (alg_name, alg_fn, eval_fn, params) in algorithms
+            println("  $alg_name on $dataset_short...")
+
+            history, _, _ = alg_fn(landscape, POPSIZE, GENERATIONS, eval_fn; params...)
+
+            # Static panel figure
+            fig = plot_behavior_panel(landscape, history, alg_name, local_optima)
+            save(joinpath(out_path, "$(dataset_short)_$(alg_name)_behavior.png"), fig)
+
+            # GIF animation (skip if no row-6 path tracking, i.e. NSGA2)
+            if make_gif && size(history, 1) >= 6
+                gif_path = joinpath(out_path, "$(dataset_short)_$(alg_name)_behavior.gif")
+                animate_behavior(landscape, history, alg_name, gif_path;
+                    framerate = 20, skip = max(1, GENERATIONS ÷ 150))
+            end
+
+            println("    Saved to $out_path")
+        end
+    end
 end
 
 # ============== Test Behavior ===============
 
 function test_behavior()
 
-    # extract dataset
-    dataset = keys(DATASETS)[1]
-
-    # load landscape
+    dataset = first(keys(DATASETS))
     landscape = load_landscape(dataset)
 
-    # run GA and get history
-    history, _ = GA!(landscape, 10, 200)
-
-    # extract best individual from history
+    history, _, _ = GA!(landscape, 10, 200, fitness)
     best_path = Int.(history[6, :])
 
-    n = length(landscape)
-    n_bits = ceil(Int, log2(n))
-
-    # compute the local optima
+    n_bits = landscape.n_features
     local_optima = get_local_optima(landscape; k=NEIGHBORHOOD_SIZE)
 
-    # =================== Plots ===================
-
-    f1 = plot_landscape_with_path(landscape, best_path, local_optima) # DEBUG OK - poor visualization due to 2D projection
-
+    f1 = plot_landscape_with_path(landscape, best_path, local_optima)
     f2 = plot_landscape_polar_with_path(landscape, best_path)
-
     f3 = plot_hinged_map_with_path(landscape, best_path, local_optima)
 
-    # ==================== LON ====================
-
-    # Build LON
-    g, opt_index_map, basin_map = build_LON(landscape, local_optima, n_bits; k=NEIGHBORHOOD_SIZE)
-
-    # Compute basin sizes
+    g, opt_index_map, basin_map = build_LON(landscape.fitnesses, local_optima, n_bits; k=NEIGHBORHOOD_SIZE)
     basin_sizes = compute_basin_sizes(basin_map, local_optima)
- 
-    # Export LON
-    # export_LON(landscape, g, opt_index_map, basin_sizes)
-
-    # Plot LON
     f4 = plot_lon_with_path(g, landscape, opt_index_map, basin_map, basin_sizes, best_path)
 
-    # =================== Saving ==================
-
-    dir = "img_behavior_test"
-    out_path = joinpath(@__DIR__, "..", dir)
+    dataset_short = split(dataset, ".")[1]
+    out_path = joinpath(@__DIR__, "..", "img_behavior_test")
     mkpath(out_path)
 
-    dataset_short = split(dataset, ".")[1]
-
-    save("$out_path/$(dataset_short)_landscape.png", f1)
-    save("$out_path/$(dataset_short)_landscape_polar.png", f2)
-    save("$out_path/$(dataset_short)_hinged_bitstring_map.png", f3)
-    save("$out_path/$(dataset_short)_lon.png", f4)
-
-    display(f1)
-    display(f2)
-    display(f3)
-    display(f4)
+    save(joinpath(out_path, "$(dataset_short)_landscape.png"), f1)
+    save(joinpath(out_path, "$(dataset_short)_landscape_polar.png"), f2)
+    save(joinpath(out_path, "$(dataset_short)_hinged_bitstring_map.png"), f3)
+    save(joinpath(out_path, "$(dataset_short)_lon.png"), f4)
 
 end
 
