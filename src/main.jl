@@ -250,15 +250,6 @@ function test_behavior()
     basin_sizes = compute_basin_sizes(basin_map, local_optima)
     f4 = plot_lon_with_path(g, landscape, opt_index_map, basin_map, basin_sizes, best_path)
 
-    dataset_short = split(dataset, ".")[1]
-    out_path = joinpath(@__DIR__, "..", "img_behavior_test")
-    mkpath(out_path)
-    
-    save(joinpath(out_path, "$(dataset_short)_landscape.png"), f1)
-    save(joinpath(out_path, "$(dataset_short)_landscape_polar.png"), f2)
-    save(joinpath(out_path, "$(dataset_short)_hinged_bitstring_map.png"), f3)
-    save(joinpath(out_path, "$(dataset_short)_lon.png"), f4)
-    
 end
 
 function main()
