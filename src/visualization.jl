@@ -327,7 +327,7 @@ function plot_lon(
     fitness_norm = (fitness .- minimum(fitness)) ./
                    (maximum(fitness) - minimum(fitness) + eps())
 
-    # --- 4. Layout নির্বাচন ---
+    # --- 4. Layout ---
     layout = if layout_algo == :spring
         Spring(; iterations=500)
     elseif layout_algo == :kamada
@@ -812,7 +812,8 @@ function animate_behavior(
     out_path::String;
     framerate::Int = 15,
     skip::Int = 1
-)
+    )
+    
     has_path = size(history, 1) >= 6
     has_snap = !isempty(snapshots)
 

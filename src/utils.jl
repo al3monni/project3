@@ -186,11 +186,11 @@ function neighbors(index::Int, n_bits::Int; k::Int=1)
     # Loop over Hamming distances from 1 up to k
     for d in 1:k
     # Generate all combinations of bit positions of size d
-        for positions in combinations(0:n_bits-1, d)
+        for positions in combinations(1:n_bits, d)
             mask = 0
             # Build a bitmask with 1s in the selected positions
             for i in positions
-                mask |= (1 << i)
+                mask |= (1 << (i - 1))
             end
 
             # Flip the selected bits using XOR to get a neighbor
