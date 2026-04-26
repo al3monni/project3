@@ -13,15 +13,15 @@ using Dates
 const CONFIG = YAML.load_file(joinpath(@__DIR__, "parameters.yaml"))
 
 const DATASETS = CONFIG["datasets"]
-const DATASET_NAME = CONFIG["landscape"]["dataset_name"]
-const PENALTY = CONFIG["landscape"]["penalty"]
-const SYNTHETIC = CONFIG["landscape"]["synthetic"]
-const NEIGHBORHOOD_SIZE = CONFIG["neighborhood"]["size"]
+const TRAIN = [dataset for dataset in keys(DATASETS) if DATASETS[dataset]["split"] == "train"]
+const TEST = [dataset for dataset in keys(DATASETS) if DATASETS[dataset]["split"] == "test"]
+const SYNTHETIC = [dataset for dataset in keys(DATASETS) if DATASETS[dataset]["split"] == "synthetic"]
+const NEIGHBORHOOD_SIZE = CONFIG["visualization"]["neighborhood_size"]
 
 const N_RUNS = CONFIG["experiment"]["n_runs"]
 const POPSIZE = CONFIG["experiment"]["popsize"]
 const GENERATIONS = CONFIG["experiment"]["generations"]
-const OUTPUT_DIR = next_run_dir(CONFIG["experiment"]["output_dir"])
+const RUN_OUTPUT_DIR = next_run_dir(CONFIG["experiment"]["output_dir"])
 
 const GA_PARAMS = Dict(
     :pc => CONFIG["algorithms"]["GA"]["pc"],
@@ -39,72 +39,53 @@ const NSGA2_PARAMS = Dict(
     
 # ============== Visualizations ==============
 
-function run_visualizations()
+function run_visualizations(datasets=keys(DATASETS))
 
     println("\nRunning landscape visualizations...")
 
-    #for dataset in keys(DATASETS)
-        #for k in 1:NEIGHBORHOOD_SIZE
+    for dataset in datasets
+        dataset_short = split(dataset, ".")[1]
+        landscape = load_landscape(dataset)
 
-        dataset = "triangle"
-        k = 1
-
-            if dataset == "triangle"
-                landscape = triangle_landscape(SYNTHETIC["n"]; m=SYNTHETIC["m"], s=SYNTHETIC["s"])
-                triangle = true
-            else
-                landscape = load_landscape(dataset)
-                triangle = false
-            end
-
-            n = length(landscape)
-            n_bits = ceil(Int, log2(n))
-            
-            local_optima = get_local_optima(landscape; k=k, triangle=triangle)
-
-            f1 = plot_landscape(landscape, local_optima; show_points = triangle)
-            #f2 = plot_landscape_polar(landscape)
-            f3 = hinged_bitstring_map(landscape, local_optima)
-
-            # ==================== LON ====================
-            
-            # Build LON
-            g, opt_index_map, basin_map = build_LON(landscape, local_optima, n_bits; k=NEIGHBORHOOD_SIZE)
-
-            # Compute basin sizes
-            basin_sizes = compute_basin_sizes(basin_map, local_optima)
-
-            # Export LON
-            #export_LON(landscape, g, opt_index_map, basin_sizes)
-
-            # Plot LON
-            f4, _ = plot_lon(g, landscape, opt_index_map, basin_sizes)
-
-            display(f1)
-            #display(f2)
-            #display(f3)
-            #display(f4)
-
-            base_path = joinpath(@__DIR__, "..", "img")
-
-            dataset_short = split(dataset, ".")[1]
-            out_path = joinpath(base_path, dataset_short, "k_$(k)")
-
+        # --- Synthetic landscapes: phenotypic view ---
+        if dataset == "triangle" || dataset == "asymmetric"
+            out_path = joinpath(@__DIR__, "..", "img", dataset_short)
             mkpath(out_path)
 
-            #save(joinpath(out_path, "$(dataset_short)_k$(k)_2Dlandscape.png"), f1)
-            #save(joinpath(out_path,"$(dataset_short)_k$(k)_landscape_polar.png", f2)
-            #save(joinpath(out_path, "$(dataset_short)_k$(k)_hinged_bitstring_map.png"), f3)
-            #save(joinpath(out_path, "$(dataset_short)_k$(k)_lon.png"), f4)
-
-            println("  Saved visualizations for $dataset")
+            f = plot_triangle_phenotype(dataset)
+            save(joinpath(out_path, "$(dataset_short)_phenotype.png"), f)
+            println("  Saved phenotype plot for $dataset")
+            continue
         end
-    #end
-#end
+
+        # --- Real feature-selection landscapes: full structural analysis ---
+        n_bits = landscape.n_features
+
+        for k in 1:NEIGHBORHOOD_SIZE
+            local_optima = get_local_optima(landscape; k=k)
+
+            f1 = plot_landscape(landscape.fitnesses, local_optima)
+            f3 = hinged_bitstring_map(landscape.fitnesses, local_optima)
+
+            g, opt_index_map, basin_map = build_LON(landscape.fitnesses, local_optima, n_bits; k=k)
+            basin_sizes = compute_basin_sizes(basin_map, local_optima)
+            f4, _ = plot_lon(g, landscape.fitnesses, opt_index_map, basin_sizes)
+
+            out_path = joinpath(@__DIR__, "..", "img", dataset_short, "k_$(k)")
+            mkpath(out_path)
+
+            save(joinpath(out_path, "$(dataset_short)_k$(k)_2Dlandscape.png"), f1)
+            save(joinpath(out_path, "$(dataset_short)_k$(k)_hinged_bitstring_map.png"), f3)
+            save(joinpath(out_path, "$(dataset_short)_k$(k)_lon.png"), f4)
+
+            println("  Saved visualizations for $dataset (k=$k)")
+        end
+    end
+end
 
 # ============== Run Experiment ==============
 
-function run(landscape, algorithm, pop_size, k_max, params, n_runs) # -> average history across runs + statistics
+function run(landscape, algorithm, pop_size, k_max, f, params, n_runs) # -> average history across runs + statistics
     
     histories = Vector{Any}(undef, n_runs) # -> [history1, history2, ...] where history_i is [5, generations]
     results = Vector{Any}(undef, n_runs)
@@ -112,7 +93,7 @@ function run(landscape, algorithm, pop_size, k_max, params, n_runs) # -> average
 
      for i in 1:n_runs
         println("  Run $i / $n_runs")
-        histories[i], results[i], pareto_fronts[i] = algorithm(landscape, pop_size, k_max; params...) # -> [5, generations], EvoLP.Result, pareto_front
+        histories[i], results[i], pareto_fronts[i], _ = algorithm(landscape, pop_size, k_max, f; params...)
     end
     
     # Compute averaged history across runs
@@ -132,7 +113,7 @@ function run(landscape, algorithm, pop_size, k_max, params, n_runs) # -> average
     # Compute statistics across runs
     bests = [r.fxstar for r in results]
     avg_best = mean(bests)
-    std_best = std(bests)
+    std_best = isnan(std(bests)) ? 0.0 : std(bests)
     min_best = minimum(bests)
     max_best = maximum(bests)
 
@@ -148,115 +129,142 @@ function run(landscape, algorithm, pop_size, k_max, params, n_runs) # -> average
     return avg_history, avg_best, std_best, min_best, max_best, pareto_front
 end
 
-function main()
+function run_experiments(datasets=keys(DATASETS))
 
-    # run_visualizations()
+    mkpath(RUN_OUTPUT_DIR)
+    cp(joinpath(@__DIR__, "parameters.yaml"), joinpath(RUN_OUTPUT_DIR, "parameters.yaml"))
 
-    mkpath(OUTPUT_DIR)
-    cp(joinpath(@__DIR__, "parameters.yaml"), joinpath(OUTPUT_DIR, "parameters.yaml"))
+    println("Output will be saved to: $RUN_OUTPUT_DIR")
 
-    println("Output will be saved to: $OUTPUT_DIR")
-
-    for dataset in keys(DATASETS)
+    for dataset in datasets
         println("\n" * "="^60)
         println("EXPERIMENT: $dataset")
         println("="^60)
 
         landscape = load_landscape(dataset)
-        println("Loaded landscape with $(length(landscape)) points")
-        println("Max: $(maximum(landscape)), Min: $(minimum(landscape))")
+        println("Loaded landscape with $(length(landscape.accuracies)) points")
 
         # Initialize results file for this dataset
-        output_path = joinpath(OUTPUT_DIR, "$(split(dataset, ".")[1])_best_fitness.csv")
+        output_path = joinpath(RUN_OUTPUT_DIR, "$(split(dataset, ".")[1])_best_fitness.csv")
         open(output_path, "w") do io
             println(io, "algorithm,mean_best,std_best,min_best,max_best")
         end
 
         # Run GA
         println("\nRunning GA...")
-        results = run(landscape, GA!, POPSIZE, GENERATIONS, GA_PARAMS, N_RUNS)
-        save_results("GA", dataset, output_path, results)
+        results = run(landscape, GA!, POPSIZE, GENERATIONS, fitness, GA_PARAMS, N_RUNS)
+        save_results("GA", landscape, output_path, results)
 
         # Run PSO
         println("\nRunning PSO...")
-        results = run(landscape, PSO!, POPSIZE, GENERATIONS, PSO_PARAMS, N_RUNS)
-        save_results("PSO", dataset, output_path, results)
+        results = run(landscape, PSO!, POPSIZE, GENERATIONS, fitness, PSO_PARAMS, N_RUNS)
+        save_results("PSO", landscape, output_path, results)
 
         # Run NSGA2
         println("\nRunning NSGA2...")
-        results = run(landscape, NSGA2!, POPSIZE, GENERATIONS, NSGA2_PARAMS, N_RUNS)
-        save_results("NSGA2", dataset, output_path, results)
+        results = run(landscape, NSGA2!, POPSIZE, GENERATIONS, evaluate_multiobjective, NSGA2_PARAMS, N_RUNS)
+        save_results("NSGA2", landscape, output_path, results)
 
     end
 
-    println("Output saved to: $OUTPUT_DIR")
+    println("Output saved to: $RUN_OUTPUT_DIR")
+end
 
+
+# ============== Algorithm Behaviour Visualizations ==============
+
+# Runs one instance of each algorithm on a dataset and saves:
+#   - A static multi-panel behaviour figure (PNG, good for report)
+#   - A GIF animation of the best-individual trajectory (good for presentation)
+#     Set make_gif=false to skip (requires FFMPEG).
+
+function run_behavior_visualizations(
+    datasets = TRAIN;
+    algorithms = [("GA", GA!, fitness, GA_PARAMS),
+    ("PSO", PSO!, fitness, PSO_PARAMS),
+    ("NSGA2", NSGA2!, evaluate_multiobjective, NSGA2_PARAMS)],
+    make_gif::Bool = true
+    )
+
+    println("\nRunning behaviour visualizations...")
+
+    for dataset in datasets
+        landscape  = load_landscape(dataset)
+        n_bits     = landscape.n_features
+        local_optima = get_local_optima(landscape; k=1)  # k=1 for speed
+
+        dataset_short = split(dataset, ".")[1]
+        out_path      = joinpath(@__DIR__, "..", "img", dataset_short, "behavior")
+        mkpath(out_path)
+
+        for (alg_name, alg_fn, eval_fn, params) in algorithms
+            println("  $alg_name on $dataset_short...")
+            
+            snap_every = max(1, GENERATIONS ÷ 50)   # ~50 snapshots
+            history, _, _, snapshots = alg_fn(
+                landscape, POPSIZE, GENERATIONS, eval_fn;
+                params..., snapshot_every = snap_every
+            )
+
+            # Static panel: fitness/entropy + fading best-individual trail + pop scatter
+            fig = plot_behavior_panel(landscape, history, snapshots, alg_name, local_optima)
+            save(joinpath(out_path, "$(dataset_short)_$(alg_name)_behavior.png"), fig)
+
+            # Population spread: fitness density heatmap + snapshot grid
+            fig2 = plot_fitness_density(landscape, snapshots, alg_name)
+            save(joinpath(out_path, "$(dataset_short)_$(alg_name)_fitness_density.png"), fig2)
+            
+            fig3 = plot_population_snapshots(landscape, snapshots, alg_name, local_optima)
+            save(joinpath(out_path, "$(dataset_short)_$(alg_name)_population_snapshots.png"), fig3)
+            
+            # GIF animation (all algorithms — NSGA2 shows population spread without trail)
+            if make_gif
+                gif_path = joinpath(out_path, "$(dataset_short)_$(alg_name)_behavior.gif")
+                animate_behavior(landscape, history, snapshots, alg_name, gif_path;
+                framerate = 20, skip = max(1, GENERATIONS ÷ 150))
+            end
+
+            println("    Saved to $out_path")
+        end
+    end
 end
 
 # ============== Test Behavior ===============
 
 function test_behavior()
 
-    # extract dataset
-    dataset = keys(DATASETS)[1]
-
-    # load landscape
+    dataset = first(keys(DATASETS))
     landscape = load_landscape(dataset)
 
-    # run GA and get history
-    history, _ = GA!(landscape, 10, 200)
-
-    # extract best individual from history
+    history, _, _, _ = GA!(landscape, 10, 200, fitness)
     best_path = Int.(history[6, :])
 
-    n = length(landscape)
-    n_bits = ceil(Int, log2(n))
-
-    # compute the local optima
+    n_bits = landscape.n_features
     local_optima = get_local_optima(landscape; k=NEIGHBORHOOD_SIZE)
 
-    # =================== Plots ===================
-
-    f1 = plot_landscape_with_path(landscape, best_path, local_optima) # DEBUG OK - poor visualization due to 2D projection
-
+    f1 = plot_landscape_with_path(landscape, best_path, local_optima)
     f2 = plot_landscape_polar_with_path(landscape, best_path)
-
     f3 = plot_hinged_map_with_path(landscape, best_path, local_optima)
 
-    # ==================== LON ====================
-
-    # Build LON
-    g, opt_index_map, basin_map = build_LON(landscape, local_optima, n_bits; k=NEIGHBORHOOD_SIZE)
-
-    # Compute basin sizes
+    g, opt_index_map, basin_map = build_LON(landscape.fitnesses, local_optima, n_bits; k=NEIGHBORHOOD_SIZE)
     basin_sizes = compute_basin_sizes(basin_map, local_optima)
- 
-    # Export LON
-    # export_LON(landscape, g, opt_index_map, basin_sizes)
-
-    # Plot LON
     f4 = plot_lon_with_path(g, landscape, opt_index_map, basin_map, basin_sizes, best_path)
-
-    # =================== Saving ==================
-
-    dir = "img_behavior_test"
-    out_path = joinpath(@__DIR__, "..", dir)
-    mkpath(out_path)
-
-    dataset_short = split(dataset, ".")[1]
-
-    save("$out_path/$(dataset_short)_landscape.png", f1)
-    save("$out_path/$(dataset_short)_landscape_polar.png", f2)
-    save("$out_path/$(dataset_short)_hinged_bitstring_map.png", f3)
-    save("$out_path/$(dataset_short)_lon.png", f4)
-
-    display(f1)
-    display(f2)
-    display(f3)
-    display(f4)
 
 end
 
-#test_behavior()
-run_visualizations()
-#main()
+function main()
+
+    # --- Training phase ---
+    run_visualizations(TRAIN)
+    run_experiments(TRAIN)
+
+    # Optional: algorithm behaviour figures + GIFs
+    # run_behavior_visualizations(TRAIN)
+
+    # --- Test phase ---
+    # run_visualizations(TEST)
+    # run_experiments(TEST)
+
+end
+
+main()

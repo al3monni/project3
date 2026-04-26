@@ -2,105 +2,180 @@ using Combinatorics
 using Printf
 using HDF5
 using Statistics
+using Base.Threads
 
 # ===========================================================
 # DATA LOADING AND FITNESS CALCULATION
 # ===========================================================
 
+struct Landscape
+    name        # string
+    accuracies  # vector of numbers
+    fitnesses   # vector of numbers
+    n_features  # int
+end
+
+# The 32-value lookup (indexed by number of active bits: 0 to 31)
+const TRIANGLE_ASYMMETRIC_TABLE = UInt8[
+    0, 1, 2, 3, 4, 5, 4, 3, 2, 1,   # 0-9  active bits
+    0, 1, 2, 3, 4, 5, 4, 3, 2, 1,   # 10-19
+    0, 1, 2, 3, 4, 5, 4, 3, 2, 1,   # 20-29
+    0, 6                             # 30-31 (exception: m=6 kicks in at 31)
+]
+
 # ============= Landscape and Fitness Functions =============
 
 function load_landscape(filename::String)
 
-    # obtain a reference for the hdf5 file
-    h5open("train/"*filename, "r") do f
+    if filename == "triangle" || filename == "asymmetric"
+        return triangle_landscape(filename)
+    end
+
+    n_features = CONFIG["datasets"][filename]["n_features"]
+    landscape = Landscape(filename, Float32[], Float32[], n_features)
+
+    # obtain a reference for the hdf5 file 
+    filepath = joinpath("train", filename)
+    if !isfile(filepath)
+        filepath = joinpath("test", filename)
+        if !isfile(filepath)
+            error("File $filename not found in train/ or test/ directories.")
+        end
+    end
+
+    h5open(filepath, "r") do f
 
         # select the "accuracies" dataset
-        data = read(f[DATASET_NAME])
+        data = read(f["accuracies"])
+        
+        # compute the mean of each row (raw accuracies)
+        accuracies = vec(mean(data, dims=2))
 
-        # compute the mean of each row
-        return vec(mean(data, dims=2))
+        # compute the fitnesses with penalty
+        penalty = CONFIG["landscape"]["$(CONFIG["datasets"][filename]["split"])_penalty"] / n_features
+        fitnesses = init_fitnesses(accuracies, n_features, penalty)
+
+        return Landscape(filename, accuracies, fitnesses, n_features)
     end
 end
 
-function get_fitness(x::Integer, lookup::Vector{Float32})
+function init_fitnesses(accuracies::Vector{Float32}, n_features::Int, penalty::Float64)
+
+    n = length(accuracies)
+    fitnesses = Vector{Float32}(undef, n)
+
+    @inbounds for x in 1:n
+        fitnesses[x] = accuracies[x] - (penalty * count_ones(x))
+    end
+
+    return fitnesses
+end
+
+function fitness(x::Integer, landscape::Landscape)
+
+    n = length(landscape.accuracies)
 
     # handle out-of-bounds cases
-    if x == 0 || x > length(lookup)
+    if x == 0 || x > n
         return 0
     end
-    
-    # compute the penalty based on feature number
-    penalty = PENALTY * count_ones(x)
-    
-    # return the penalized fitness
-    return lookup[x] - penalty
+
+    return landscape.fitnesses[x]
+end
+
+function accuracy(x::Integer, landscape::Landscape)
+
+    n = length(landscape.accuracies)
+
+    # handle out-of-bounds cases
+    if x == 0 || x > n
+        return 0
+    end
+
+    return landscape.accuracies[x]
 end
 
 # ==================== Triangle Function ====================
 
-function triangle_function(b::Integer; m::Int=1, s::Int=4)
+function triangle(b::Integer, m::Integer, s::Integer)::Integer
+    norm_b = count_ones(b)
 
-    r = abs(b)
-    t = mod(r, 2s)
+    a = ceil(Integer, norm_b/s)
 
-    if t <= s
-        return m * t
+    if a % 2 == 1
+        # g(b)
+        if norm_b % s == 0
+            return m * s
+        else 
+            return m * (norm_b % s)
+        end
     else
-        return m * (2s - t)
+        return m * (a * s - norm_b)
     end
 end
 
-function asymmetric_triangle_function(b::Integer; m::Int=1, s::Int=4)
-    
-    if b < 31
-        return triangle_function(b; m=m, s=s)
+# phenotype-level version: takes norm_b (= count of active bits) directly
+# used for visualization — avoids the count_ones(k) trap in plot_triangle_phenotype
+function triangle_phenotype(norm_b::Integer, m::Integer, s::Integer)::Integer
+    a = ceil(Integer, norm_b / s)
+    if a % 2 == 1
+        return norm_b % s == 0 ? m * s : m * (norm_b % s)
     else
-        return triangle_function(b; m=6, s=s)
+        return m * (a * s - norm_b)
     end
+end
+
+function asymmetric_triangle(b::Integer, m::Integer, s::Integer)
+
+    #     if b < 31
+    #         return triangle(b, m, s)
+    #     else
+    #         return triangle(b, 6, s)
+    #     end
+
+    active_bits = count_ones(b)
+    return TRIANGLE_ASYMMETRIC_TABLE[active_bits + 1]
     
 end
 
-function triangle_landscape(n::Integer; m::Int=1, s::Int=4)
+function triangle_landscape(filename::String)
 
-    # preallocate the lookup table
-    lookup = Vector{Int}(undef, n)
-
-    # precompute and store triangle fitness values
-    @inbounds for x in 1:2^n                              # pay attention here
-        lookup[x] = count_ones(triangle_function(x; m=m, s=s))
+    if filename == "triangle"
+        triangle_function = triangle
+    elseif filename == "asymmetric"
+        triangle_function = asymmetric_triangle
+    else
+        error("Invalid filename for triangle landscape: $filename")
     end
 
-    return lookup
+    n = CONFIG["datasets"][filename]["n"]
+    m = CONFIG["datasets"][filename]["m"]
+    s = CONFIG["datasets"][filename]["s"]
+
+    # Indices 1..2^n-1: same convention as real datasets (index 0 = no features, excluded).
+    # Any n-bit XOR of a value in [1, 2^n-1] stays in [0, 2^n-1]; 0 is filtered in neighbors().
+    size = 2^n - 1
+    lookup = Vector{Float32}(undef, size)
+    @threads for x in 1:size
+        lookup[x] = Float32(triangle_function(x, m, s))
+    end
+    return Landscape(filename, lookup, lookup, n)
 end
 
 # =========================================================
 # LOCAL OPTIMA AND NEIGHBORHOOD CALCULATIONS
 # =========================================================
 
-function get_local_optima(landscape::Vector{Float32}; k::Int=1, triangle::Bool=false)
-
-    """ compute the set of local optima for a given landscape """
-    
-    n = length(landscape)
-    bits = ceil(Int, log2(n))
-    
+function get_local_optima(landscape::Landscape; k::Int=1)
+    n = length(landscape.accuracies)
+    bits = landscape.n_features
     local_optima = Int[]
-
     for i in 1:n
-        if triangle
-            idx = i - 1
-        else
-            idx = i
-        end
-        neighborhood = neighbors(idx, bits; k=k)
-        is_optimum = all(landscape[i] >= landscape[j] for j in neighborhood)
-
-        if is_optimum
-            #println("Local optimum found at index ", to_bitstring(i, bits), " with fitness ", landscape[i])
+        neighborhood = neighbors(i, bits; k=k)
+        if all(landscape.accuracies[i] >= landscape.accuracies[j] for j in neighborhood)
             push!(local_optima, i)
         end
     end
-    
     return local_optima
 end
 
@@ -111,11 +186,11 @@ function neighbors(index::Int, n_bits::Int; k::Int=1)
     # Loop over Hamming distances from 1 up to k
     for d in 1:k
     # Generate all combinations of bit positions of size d
-        for positions in combinations(0:n_bits-1, d)
+        for positions in combinations(1:n_bits, d)
             mask = 0
             # Build a bitmask with 1s in the selected positions
             for i in positions
-                mask |= (1 << i)
+                mask |= (1 << (i - 1))
             end
 
             # Flip the selected bits using XOR to get a neighbor
@@ -188,30 +263,26 @@ function polar_coordinates(coordinates; base_radius = 0.1, radial_scale = 0.4)
     return x, y
 end
 
-function save_results(algorithm::String, dataset::String, file::String, data)
+function save_results(algorithm::String, landscape::Landscape, file::String, data)
     history, avg_best, std_best, min_best, max_best, pareto_front = data
 
-    dataset_name = split(dataset, ".")[1]
+    dataset_name = split(landscape.name, ".")[1]
+    out_dir = dirname(file)  # same directory as the CSV results file
 
-    # History graph
-    evolution_plot = plot_evolution(history, dataset, "$algorithm on $dataset_name")
-    save(joinpath(OUTPUT_DIR, "$(dataset_name)_$(algorithm)_evolution.png"), evolution_plot)
+    evolution_plot = plot_evolution(history, landscape, algorithm)
+    save(joinpath(out_dir, "$(dataset_name)_$(algorithm)_evolution.png"), evolution_plot)
 
-    # Entropy graph
     entropy_plot = plot_entropy(history, "$algorithm on $dataset_name")
-    save(joinpath(OUTPUT_DIR, "$(dataset_name)_$(algorithm)_entropy.png"), entropy_plot)
+    save(joinpath(out_dir, "$(dataset_name)_$(algorithm)_entropy.png"), entropy_plot)
 
-    # Pareto front graph (for NSGA2)
     if pareto_front !== nothing
         pareto_plot = plot_pareto_front(pareto_front, "Pareto Front on $dataset_name")
-        save(joinpath(OUTPUT_DIR, "$(dataset_name)_$(algorithm)_pareto.png"), pareto_plot)
+        save(joinpath(out_dir, "$(dataset_name)_$(algorithm)_pareto.png"), pareto_plot)
     end
 
-    # Append summary other stats to output file
     open(file, "a") do io
-        println(io, "$algorithm,$avg_best,$std_best,$min_best,$max_best")
+        println(io, "$algorithm,$(round(avg_best, digits=5)),$(round(std_best, digits=5)),$(round(min_best, digits=5)),$(round(max_best, digits=5))")
     end
-
 end
 
 function entropy(population::Vector{BitVector})
