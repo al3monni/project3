@@ -11,8 +11,8 @@ function overlay_path!(
     for i in 1:(n-1)
         dx = xs[i+1] - xs[i]
         dy = ys[i+1] - ys[i]
-        arrows!(ax, [xs[i]], [ys[i]], [dx], [dy],
-            color=color, arrowsize=10)
+        arrows2d!(ax, [xs[i]], [ys[i]], [dx], [dy],
+            color=color, tiplength=10, tipwidth=10)
     end
 end
 

@@ -29,7 +29,6 @@ function load_landscape(filename::String)
 
     if filename == "triangle" || filename == "asymmetric"
         return triangle_landscape(filename)
-        penalty = penalty * count_ones(x) / n_features
     end
 
     n_features = CONFIG["datasets"][filename]["n_features"]
@@ -53,7 +52,7 @@ function load_landscape(filename::String)
         accuracies = vec(mean(data, dims=2))
 
         # compute the fitnesses with penalty
-        penalty = (filename == "triangle" || filename == "asymmetric") ? CONFIG["landscape"]["$(CONFIG["datasets"][filename]["split"])_penalty"] / n_features : 0.0
+        penalty = CONFIG["landscape"]["$(CONFIG["datasets"][filename]["split"])_penalty"] / n_features
         fitnesses = init_fitnesses(accuracies, n_features, penalty)
 
         return Landscape(filename, accuracies, fitnesses, n_features)
@@ -282,7 +281,7 @@ function save_results(algorithm::String, landscape::Landscape, file::String, dat
     end
 
     open(file, "a") do io
-        println(io, "$algorithm,$avg_best,$std_best,$min_best,$max_best")
+        println(io, "$algorithm,$(round(avg_best, digits=5)),$(round(std_best, digits=5)),$(round(min_best, digits=5)),$(round(max_best, digits=5))")
     end
 end
 

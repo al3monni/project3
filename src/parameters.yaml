@@ -39,7 +39,7 @@ visualization:
 
 # Experiment parameters
 experiment:
-  n_runs: 1              # Number of independent runs
+  n_runs: 30              # Number of independent runs
   popsize: 50             # Population size
   generations: 100        # Number of generations
   output_dir: "res"       # Base output directory

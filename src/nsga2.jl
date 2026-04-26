@@ -13,7 +13,8 @@ function NSGA2!(
     k_max::Int,
     f::Function;
     pc::Float64 = 0.9,
-    pm::Float64 = -1.0
+    pm::Float64 = -1.0,
+    snapshot_every::Int = 0
     )
 
     L = length(landscape.accuracies)
@@ -31,7 +32,8 @@ function NSGA2!(
     update_population_metadata!(population)
 
     # History tracking (5 rows: min, max, mean, std, entropy)
-    history = zeros(Float64, 5, k_max)
+    history   = zeros(Float64, 5, k_max)
+    snapshots = Dict{Int, Vector{Int}}()
 
     runtime = @elapsed begin
         for gen in 1:k_max
@@ -61,6 +63,9 @@ function NSGA2!(
             history[3, gen] = mean(accs)
             history[4, gen] = std(accs)
             history[5, gen] = entropy([ind.bits for ind in population])
+            if snapshot_every > 0 && (gen == 1 || gen % snapshot_every == 0 || gen == k_max)
+                snapshots[gen] = [bitvector_to_index(ind.bits) for ind in population]
+            end
         end
     end
 
@@ -68,7 +73,7 @@ function NSGA2!(
     best = best_by_accuracy(pareto_front)
     n_evals = (1 + k_max) * popsize
 
-    return history, Result(best.objectives[1], best.bits, population, k_max, n_evals, runtime), pareto_front
+    return history, Result(best.objectives[1], best.bits, population, k_max, n_evals, runtime), pareto_front, snapshots
 end
 
 # =========================================================

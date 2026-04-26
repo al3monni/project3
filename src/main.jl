@@ -93,7 +93,7 @@ function run(landscape, algorithm, pop_size, k_max, f, params, n_runs) # -> aver
 
      for i in 1:n_runs
         println("  Run $i / $n_runs")
-        histories[i], results[i], pareto_fronts[i] = algorithm(landscape, pop_size, k_max, f; params...) # -> [5, generations], EvoLP.Result, pareto_front
+        histories[i], results[i], pareto_fronts[i], _ = algorithm(landscape, pop_size, k_max, f; params...)
     end
     
     # Compute averaged history across runs
@@ -170,20 +170,6 @@ function run_experiments(datasets=keys(DATASETS))
     println("Output saved to: $RUN_OUTPUT_DIR")
 end
 
-function main()
-
-    # --- Training phase ---
-    run_visualizations(TRAIN)
-    run_experiments(TRAIN)
-
-    # Optional: algorithm behaviour figures + GIFs
-    run_behavior_visualizations(TRAIN)
-
-    # --- Test phase (uncomment when ready) ---
-    # run_visualizations(TEST)
-    # run_experiments(TEST)
-
-end
 
 # ============== Algorithm Behaviour Visualizations ==============
 
@@ -195,8 +181,8 @@ end
 function run_behavior_visualizations(
     datasets = TRAIN;
     algorithms = [("GA", GA!, fitness, GA_PARAMS),
-                  ("PSO", PSO!, fitness, PSO_PARAMS),
-                  ("NSGA2", NSGA2!, evaluate_multiobjective, NSGA2_PARAMS)],
+    ("PSO", PSO!, fitness, PSO_PARAMS),
+    ("NSGA2", NSGA2!, evaluate_multiobjective, NSGA2_PARAMS)],
     make_gif::Bool = true
     )
 
@@ -213,18 +199,29 @@ function run_behavior_visualizations(
 
         for (alg_name, alg_fn, eval_fn, params) in algorithms
             println("  $alg_name on $dataset_short...")
+            
+            snap_every = max(1, GENERATIONS ÷ 50)   # ~50 snapshots
+            history, _, _, snapshots = alg_fn(
+                landscape, POPSIZE, GENERATIONS, eval_fn;
+                params..., snapshot_every = snap_every
+            )
 
-            history, _, _ = alg_fn(landscape, POPSIZE, GENERATIONS, eval_fn; params...)
-
-            # Static panel figure
-            fig = plot_behavior_panel(landscape, history, alg_name, local_optima)
+            # Static panel: fitness/entropy + fading best-individual trail + pop scatter
+            fig = plot_behavior_panel(landscape, history, snapshots, alg_name, local_optima)
             save(joinpath(out_path, "$(dataset_short)_$(alg_name)_behavior.png"), fig)
 
-            # GIF animation (skip if no row-6 path tracking, i.e. NSGA2)
-            if make_gif && size(history, 1) >= 6
+            # Population spread: fitness density heatmap + snapshot grid
+            fig2 = plot_fitness_density(landscape, snapshots, alg_name)
+            save(joinpath(out_path, "$(dataset_short)_$(alg_name)_fitness_density.png"), fig2)
+            
+            fig3 = plot_population_snapshots(landscape, snapshots, alg_name, local_optima)
+            save(joinpath(out_path, "$(dataset_short)_$(alg_name)_population_snapshots.png"), fig3)
+            
+            # GIF animation (all algorithms — NSGA2 shows population spread without trail)
+            if make_gif
                 gif_path = joinpath(out_path, "$(dataset_short)_$(alg_name)_behavior.gif")
-                animate_behavior(landscape, history, alg_name, gif_path;
-                    framerate = 20, skip = max(1, GENERATIONS ÷ 150))
+                animate_behavior(landscape, history, snapshots, alg_name, gif_path;
+                framerate = 20, skip = max(1, GENERATIONS ÷ 150))
             end
 
             println("    Saved to $out_path")
@@ -239,7 +236,7 @@ function test_behavior()
     dataset = first(keys(DATASETS))
     landscape = load_landscape(dataset)
 
-    history, _, _ = GA!(landscape, 10, 200, fitness)
+    history, _, _, _ = GA!(landscape, 10, 200, fitness)
     best_path = Int.(history[6, :])
 
     n_bits = landscape.n_features
@@ -256,11 +253,26 @@ function test_behavior()
     dataset_short = split(dataset, ".")[1]
     out_path = joinpath(@__DIR__, "..", "img_behavior_test")
     mkpath(out_path)
-
+    
     save(joinpath(out_path, "$(dataset_short)_landscape.png"), f1)
     save(joinpath(out_path, "$(dataset_short)_landscape_polar.png"), f2)
     save(joinpath(out_path, "$(dataset_short)_hinged_bitstring_map.png"), f3)
     save(joinpath(out_path, "$(dataset_short)_lon.png"), f4)
+    
+end
+
+function main()
+
+    # --- Training phase ---
+    run_visualizations(TRAIN)
+    run_experiments(TRAIN)
+
+    # Optional: algorithm behaviour figures + GIFs
+    # run_behavior_visualizations(TRAIN)
+
+    # --- Test phase ---
+    # run_visualizations(TEST)
+    # run_experiments(TEST)
 
 end
 

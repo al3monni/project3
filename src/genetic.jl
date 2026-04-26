@@ -1,7 +1,5 @@
 using EvoLP
 using Statistics
-
-
 function compute!(history, fitnesses, population, generation)
     history[1, generation] = minimum(fitnesses)
     history[2, generation] = maximum(fitnesses)
@@ -26,7 +24,7 @@ function bitstring_to_index(x::BitVector)
     for (i, bit) in enumerate(x)
         idx += bit ? 2^(i-1) : 0
     end
-    return idx + 1  # +1 for 1-based indexing
+    return idx  # bitstring integer value IS the 1-based index; 0 means all-features-off (excluded)
 end
 
 function PSO!(
@@ -34,7 +32,8 @@ function PSO!(
     popsize::Int64,
     k_max::Int64,
     f::Function;
-    w=1.0, c1=1.0, c2=1.0, vmax=6.0, maximize=true
+    w=1.0, c1=1.0, c2=1.0, vmax=6.0, maximize=true,
+    snapshot_every::Int = 0
 )
     L = length(landscape.accuracies)
     n_bits = ceil(Int, log2(L))
@@ -54,6 +53,7 @@ function PSO!(
     x_best = copy(population[1].x)
     y_best = invalid_fitness
     history = zeros(Float64, 6, k_max)
+    snapshots = Dict{Int, Vector{Int}}()
 
     runtime = @elapsed begin
         # initial evaluation
@@ -101,6 +101,9 @@ function PSO!(
             end
 
             compute!(history, [P.y for P in population], [P.x for P in population], gen)
+            if snapshot_every > 0 && (gen == 1 || gen % snapshot_every == 0 || gen == k_max)
+                snapshots[gen] = filter(!=(0), [bitstring_to_index(P.x) for P in population])
+            end
         end
     end
 
@@ -110,7 +113,7 @@ function PSO!(
     best = population[best_i]
     n_evals = (1 + k_max) * length(population)
 
-    return history, Result(best.y_best, best.x_best, population, k_max, n_evals, runtime), nothing
+    return history, Result(best.y_best, best.x_best, population, k_max, n_evals, runtime), nothing, snapshots
 end
 
 # ==================== Genetic Algorithm ====================
@@ -124,7 +127,8 @@ function GA!(
     C::EvoLP.Recombinator=EvoLP.UniformCrossover(),
     M::EvoLP.Mutator=EvoLP.BitwiseMutator(0.05),
     pc=0.9,
-    pm=-1.0
+    pm=-1.0,
+    snapshot_every::Int = 0
     )
 
     L = length(landscape.accuracies)
@@ -148,6 +152,7 @@ function GA!(
     fitnesses .= evaluate.(population)
 
     history = zeros(Float64, 6, k_max)
+    snapshots = Dict{Int, Vector{Int}}()
 
     runtime = @elapsed for gen in 1:k_max
         # EvoLP selectors minimize, so maximize f by minimizing -f
@@ -183,6 +188,9 @@ function GA!(
 
         # store min, max, mean, std of true fitnesses
         compute!(history, fitnesses, population, gen)
+        if snapshot_every > 0 && (gen == 1 || gen % snapshot_every == 0 || gen == k_max)
+            snapshots[gen] = filter(!=(0), [bitstring_to_index(ind) for ind in population])
+        end
     end
 
     # Since we maximize, best is argmax
@@ -190,5 +198,5 @@ function GA!(
     best = population[best_i]
     n_evals = (k_max + 1) * popsize
 
-    return history, Result(fitnesses[best_i], best, population, k_max, n_evals, runtime), nothing
+    return history, Result(fitnesses[best_i], best, population, k_max, n_evals, runtime), nothing, snapshots
 end
